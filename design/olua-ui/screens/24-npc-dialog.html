@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>24 · NPC 对话 · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── NPC 对话框：全宽 1920 × 324（1080 的 30%），贴屏幕底边，盖住 HUD 底栏 ──
+   状态：#state=normal（默认） / #state=long（长文分页） / #state=quest（任务快捷） / #state=empty（未配置）
+   结构：顶缘柔光 → 名牌头（肖像 + 名字 + 关闭）→ 正文（分页）→ 底部操作条（进度 + 快捷动作 + 继续/完成） */
+.npcbar{position:absolute;left:0;right:0;bottom:0;height:324px;z-index:var(--z-dialog);
+  display:flex;flex-direction:column;border-top:var(--bw-2) solid var(--line-3);border-radius:var(--r-3) var(--r-3) 0 0;
+  background:linear-gradient(180deg,rgba(36,26,17,.96),rgba(21,15,8,.98) 38%,rgba(14,9,5,.99));
+  box-shadow:0 -24px 64px -28px rgba(0,0,0,.92),inset 0 1px 0 rgba(247,233,198,.08)}
+.npcbar::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(232,200,135,.65) 18%,rgba(232,200,135,.65) 82%,transparent)}
+/* 顶缘柔光：让全宽面板与世界的分界不生硬 */
+.npc-glow{position:absolute;left:0;right:0;bottom:324px;height:68px;pointer-events:none;z-index:var(--z-dialog);
+  background:linear-gradient(180deg,transparent,rgba(10,7,4,.42) 60%,rgba(10,7,4,.72))}
+
+/* 头：肖像 72×72 + 名字 + 来源标识 + 关闭 */
+.npc-head{flex:0 0 96px;display:flex;align-items:center;gap:var(--sp-6);padding:var(--sp-5) var(--sp-9) var(--sp-4);
+  border-bottom:var(--bw-1) solid var(--line-1)}
+.npc-portrait{position:relative;width:72px;height:72px;flex:none;border-radius:var(--r-2);
+  border:var(--bw-2) solid var(--gold-3);background:radial-gradient(circle at 50% 35%,#372A1C,#0E0905 78%);
+  display:grid;place-items:center;box-shadow:var(--glow-gold),inset 0 0 18px rgba(0,0,0,.8)}
+.npc-portrait span{font-family:var(--font-display);font-weight:700;font-size:var(--fs-32);color:var(--gold-4);line-height:1}
+.npc-portrait::after{content:"";position:absolute;inset:4px;border:var(--bw-1) solid rgba(232,200,135,.24);border-radius:var(--r-1)}
+.npc-id{min-width:0;display:flex;flex-direction:column;gap:var(--sp-1)}
+.npc-name{font-family:var(--font-display);font-size:var(--fs-20);letter-spacing:var(--ls-wide);color:var(--gold-5);line-height:1.25}
+.npc-meta{display:flex;align-items:center;gap:var(--sp-4);font-size:var(--fs-11);color:var(--text-4);letter-spacing:var(--ls-normal)}
+.npc-meta i{font-style:normal;font-family:var(--font-num)}
+.npc-meta .sep{width:1px;height:10px;background:var(--line-2)}
+.npc-head .spacer{flex:1}
+.npc-hint{font-size:var(--fs-11);color:var(--text-4);letter-spacing:var(--ls-normal)}
+.npc-close{width:36px;height:36px;display:grid;place-items:center;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-2);background:rgba(0,0,0,.34);color:var(--text-3);
+  font-size:var(--fs-18);line-height:1;transition:all var(--dur-1)}
+.npc-close:hover{color:var(--gold-5);border-color:var(--gold-3)}
+
+/* 正文：每页最多三行，左侧引言符，正文最大宽 1560 居中 */
+.npc-body{flex:1;min-height:0;position:relative;padding:var(--sp-6) var(--sp-13) var(--sp-4)}
+.npc-body::before{content:"❝";position:absolute;left:var(--sp-10);top:var(--sp-4);
+  font-family:var(--font-display);font-size:var(--fs-56);color:rgba(194,146,69,.15);line-height:1}
+.npc-text{max-width:1560px;margin:0 auto;min-height:96px;font-family:var(--font-ui);
+  font-size:var(--fs-18);line-height:var(--lh-loose);color:var(--text-1);letter-spacing:.02em;
+  text-shadow:0 2px 4px rgba(0,0,0,.72)}
+.npc-text .em{color:var(--gold-4)}
+.npc-body.scroll .npc-text{max-height:100%;overflow:auto}
+
+/* 底条：进度点（左）/ 快捷动作 + 继续（右） */
+.npc-foot{flex:0 0 76px;display:flex;align-items:center;gap:var(--sp-6);padding:0 var(--sp-13);
+  border-top:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.18)}
+.npc-pages{display:flex;align-items:center;gap:var(--sp-3);font-size:var(--fs-11);color:var(--text-4);letter-spacing:var(--ls-normal)}
+.npc-dots{display:flex;gap:var(--sp-2);margin-left:var(--sp-3)}
+.npc-dots i{width:20px;height:3px;border-radius:var(--r-pill);background:var(--gold-1);opacity:.55}
+.npc-dots i.on{background:var(--gold-4);opacity:1;box-shadow:var(--glow-gold)}
+.npc-foot .spacer{flex:1}
+.npc-actions{display:flex;gap:var(--sp-4)}
+.npc-keyhint{font-size:var(--fs-11);color:var(--text-4);letter-spacing:var(--ls-normal)}
+.npc-keyhint kbd{font-family:var(--font-num);font-size:var(--fs-10);color:var(--text-3);padding:1px 4px;
+  border:var(--bw-1) solid var(--line-2);border-radius:var(--r-1);background:rgba(0,0,0,.36)}
+
+/* 演示用状态切换（不属于设计稿本体，仅本页预览） */
+.demo-tabs{position:absolute;left:var(--sp-9);top:var(--sp-9);z-index:var(--z-toast);display:flex;gap:var(--sp-3)}
+.demo-tabs button{height:30px;padding:0 12px;border-radius:var(--r-pill);border:var(--bw-1) solid var(--line-2);
+  background:rgba(14,9,5,.82);color:var(--text-3);font-size:var(--fs-11);letter-spacing:var(--ls-normal)}
+.demo-tabs button.on{border-color:var(--gold-3);color:var(--text-on-gold);background:linear-gradient(180deg,var(--gold-4),var(--gold-3))}
+.demo-title{position:absolute;right:var(--sp-9);top:var(--sp-9);z-index:var(--z-toast);text-align:right}
+.demo-title b{font-family:var(--font-display);font-size:var(--fs-20);color:var(--gold-5);letter-spacing:var(--ls-wide)}
+.demo-title span{display:block;font-size:var(--fs-11);color:var(--text-4);letter-spacing:var(--ls-normal);margin-top:2px}
+
+/* 背景 HUD 的简化示意：对话框会盖住聊天窗 / 消息记录 / 底栏 */
+.hud-chat{position:absolute;left:20px;bottom:18px;width:424px;height:302px;border-radius:var(--r-3);
+  border:var(--bw-1) solid var(--line-2);background:rgba(25,18,9,.72);padding:12px}
+.hud-chat b{font-size:var(--fs-12);color:var(--gold-4)}
+.hud-chat p{font-size:var(--fs-12);color:var(--text-3);margin-top:10px;line-height:1.8}
+.hud-nav{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);width:900px;height:126px;
+  border-radius:var(--r-3);border:var(--bw-1) solid var(--line-2);background:rgba(25,18,9,.72);
+  display:grid;place-items:center;font-size:var(--fs-12);color:var(--text-4);letter-spacing:var(--ls-wide)}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg" alt="沙城战场"></div>
+  <div class="stage-scrim"></div>
+
+  <!-- 背景 HUD（示意，会被对话框盖住） -->
+  <div class="layer layer--hud">
+    <div class="hud-chat"><b>聊天 · 世界</b><p>（对话框打开时，这一块被盖住）<br>断刃：东门集合，行会战半小时后开打<br>冷月：带上我这把奶</p></div>
+    <div class="hud-nav">快捷栏 / 技能 / 底部导航</div>
+  </div>
+
+  <!-- 演示切换（设计稿专用） -->
+  <div class="demo-tabs">
+    <button data-state="normal">普通对话</button>
+    <button data-state="long">长文分页</button>
+    <button data-state="quest">带任务动作</button>
+    <button data-state="empty">未配置文案</button>
+  </div>
+  <div class="demo-title"><b>24 · NPC 对话</b><span>全宽 1920 × 高 324（1080 的 30%）</span></div>
+
+  <div class="npc-glow"></div>
+  <section class="npcbar" id="bar">
+    <header class="npc-head">
+      <div class="npc-portrait"><span id="portrait">使</span></div>
+      <div class="npc-id">
+        <div class="npc-name" id="npcName">神装使者</div>
+        <div class="npc-meta"><span>对话</span><span class="sep"></span><i id="npcId">NPC 1001</i></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="npc-hint" id="headHint">点击正文或按 Enter 继续</div>
+      <button class="npc-close" aria-label="关闭对话">×</button>
+    </header>
+
+    <div class="npc-body" id="body">
+      <div class="npc-text" id="text"></div>
+    </div>
+
+    <footer class="npc-foot">
+      <div class="npc-pages"><span id="pageNum">1 / 1</span><div class="npc-dots" id="dots"></div></div>
+      <div class="spacer"></div>
+      <div class="npc-actions" id="actions"></div>
+      <div class="npc-keyhint"><kbd>Enter</kbd> 继续 · <kbd>Esc</kbd> 关闭</div>
+    </footer>
+  </section>
+
+</div></div>
+<script src="../stage.js"></script>
+<script>
+(function () {
+  var STATES = {
+    normal: {
+      name: '神装使者', id: 'NPC 1001', portrait: '使',
+      pages: ['旅人，你终于来了。<br>这沙城里的装备都有<span class="em">自己的脾气</span> —— 你若肯听，我便说说它们的来历。'],
+      actions: []
+    },
+    long: {
+      name: '星灯纪引路人', id: 'NPC 1101', portrait: '星',
+      pages: [
+        '你脚下的这条路，曾经有无数人走过。<br>他们带着火把与刀，把黑夜一寸寸往山外推 —— 如今火把还在，人却只剩传说。',
+        '星灯纪的年轮有二十八环。<span class="em">每一环都藏着一句没说完的话</span>，走完它们，你或许能明白：所谓归途，不是回到原处，而是终于知道自己要去哪里。',
+        '我不催你。<br>把火把点起来，往前走一段吧 —— 若你愿意回头，我始终在这里。'
+      ],
+      actions: []
+    },
+    quest: {
+      name: '铁匠铺老板', id: 'NPC 1004', portrait: '铁',
+      pages: ['这批货压了三天了。<br>城外沙盗越来越多，若你能替我<span class="em">清掉五个匪首</span>，打造的费用我给你打个折。'],
+      actions: [
+        { label: '接受任务', kind: 'gold' },
+        { label: '查看任务', kind: 'ghost' }
+      ]
+    },
+    empty: {
+      name: '看门人', id: 'NPC 1099', portrait: '门',
+      pages: ['（这位 NPC 还没有话要说。）'],
+      actions: []
+    }
+  };
+  var state = 'normal', page = 0, data = STATES.normal;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function render() {
+    var pages = data.pages || [];
+    if (page >= pages.length) page = pages.length - 1;
+    $('npcName').textContent = data.name;
+    $('npcId').textContent = data.id;
+    $('portrait').textContent = data.portrait;
+    $('text').innerHTML = pages[page] || '';
+    $('pageNum').textContent = (page + 1) + ' / ' + pages.length;
+    $('dots').innerHTML = pages.map(function (_, i) { return '<i class="' + (i === page ? 'on' : '') + '"></i>'; }).join('');
+    $('headHint').textContent = pages.length > 1 ? '点击正文或按 Enter 翻页' : '点击正文或按 Enter 关闭';
+    $('actions').innerHTML = data.actions.map(function (a) {
+      return '<button class="btn btn--xs ' + (a.kind === 'gold' ? 'btn--gold' : '') + '">' + a.label + '</button>';
+    }).join('') + '<button class="btn btn--xs btn--gold" id="next">' +
+      (page + 1 < pages.length ? '继续 ▾' : '完成') + '</button>';
+    $('next').onclick = advance;
+    $('text').onclick = advance;
+  }
+  function advance() { if (page + 1 < data.pages.length) { page++; render(); } else { /* 演示体不真关 */ } }
+  function setState(next) {
+    state = next; data = STATES[next] || STATES.normal; page = 0;
+    ['normal','long','quest','empty'].forEach(function (key) {
+      document.querySelector('.demo-tabs button[data-state="' + key + '"]').classList.toggle('on', key === state);
+    });
+    render();
+  }
+  document.querySelectorAll('.demo-tabs button').forEach(function (b) {
+    b.onclick = function () { setState(b.getAttribute('data-state')); };
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Enter') advance(); });
+  setState(/state=(normal|long|quest|empty)/.exec(location.hash) ? /state=(normal|long|quest|empty)/.exec(location.hash)[1] : 'normal');
+})();
+</script>
+</body>
+</html>

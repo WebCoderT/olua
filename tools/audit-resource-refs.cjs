@@ -62,7 +62,7 @@ if (!fs.existsSync(RES_ROOT)) {
 }
 
 /** 常见资源扩展名（大小写不敏感比对；素材包里有 00000.PNG 这类大写扩展名） */
-const EXTS = new Set(["png", "jpg", "jpeg", "plist", "ttf", "fnt", "tmx", "tsx", "json", "mp3", "wav"]);
+const EXTS = new Set(["png", "jpg", "jpeg", "plist", "ttf", "fnt", "tmx", "tsx", "json", "mp3", "wav", "prefab"]);
 
 /** 通用扫描的跳过值：无斜杠（"stand" 这类普通字符串）、引擎类型、代码标识 */
 function looksLikeResourcePath(value) {

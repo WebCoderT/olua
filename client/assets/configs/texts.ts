@@ -131,6 +131,27 @@ export const uiTexts = {
   /** 已交付领奖 */
   message_log_quest_claimed: "「{quest}」已交付",
 
+  //#region 通用 NPC 对话框（#1337；底部全宽 prefab，文案全部走这里）
+  /** 后台没配对话文案且没有可操作任务时的兜底 */
+  npc_dialog_empty: "（这位 NPC 还没有话要说。）",
+  /** 没配文案但有可接/可交付任务时的引导句 */
+  npc_dialog_intro: "找我有什么事？",
+  /** NPC 名字没进快照时的兜底 */
+  npc_dialog_unknown: "旅人",
+  /** 名牌下的来源标识（{id} = NPC id） */
+  npc_dialog_meta: "NPC {id}",
+  /** 顶部操作提示 */
+  npc_dialog_hint: "点击正文或按 Enter 继续",
+  /** 底部键位提示 */
+  npc_dialog_key_hint: "Enter 继续 · Esc 关闭",
+  label_npc_dialog_accept: "接受任务",
+  label_npc_dialog_submit: "交付任务",
+  label_npc_dialog_next: "继续",
+  label_npc_dialog_done: "完成",
+  npc_dialog_accepted_tip: "任务已接取",
+  /** 交付奖励（{exp} 经验 · {bindGold} 绑定元宝，均取服务端结算结果） */
+  npc_dialog_submitted_tip: "任务已交付，获得 {exp} 经验、{bindGold} 绑定元宝",
+
   //#region 消息记录：个人流水（#1229：经验 / 等级 / 货币 / 物品 / 成长；数值自带符号，如 {value} = +3,200）
   /** 经验增减（{value} 带符号） */
   message_log_exp: "经验 {value}",

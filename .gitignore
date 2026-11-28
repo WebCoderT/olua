@@ -26,6 +26,17 @@ node_modules/
 # 客户端素材（体积大、不进版本库；删前必备份）
 client/assets/resources/
 
+# 例外：#1337 的通用 NPC 对话 prefab 是**代码资产**（要在编辑器里可视化改版式），
+# 连同它依赖的纯色图一起入库；其余素材仍不进仓库
+!client/assets/resources/
+client/assets/resources/*
+!client/assets/resources/ui/
+client/assets/resources/ui/*
+!client/assets/resources/ui/NpcDialog.prefab
+!client/assets/resources/ui/NpcDialog.prefab.meta
+!client/assets/resources/ui/npc-solid.png
+!client/assets/resources/ui/npc-solid.png.meta
+
 # resources 分发的分卷 zip 产物（make resources-pack 输出；进 GitHub Release，不进仓库）
 resources_dist/
 # 已图集化的散帧归档（#235：从 assets 移出的原始逐帧素材 + .meta，重新打包或回退时用）

@@ -1,5 +1,6 @@
 import { QuestApi } from "./Api";
 import QuestStore from "../../core/QuestStore";
+import NpcDialog from "../../components/dialogs/NpcDialog";
 
 /** 服务端 talk 距离闸的业务码（`BizCode.QUEST_NOT_NEAR_NPC`，20032）：客户端不引服务端码表，字面量对齐 */
 const BIZ_NOT_NEAR_NPC = 20032;
@@ -37,6 +38,8 @@ export default class QuestTalk {
     void QuestApi.npcTalk({ npcId }, { silent: true })
       .then((result) => {
         for (const state of result.quests) QuestStore.applyState(state);
+        // #1337：后台配的对话文案由通用底部对话条显示；无文案且无可操作任务时它自己静默跳过
+        NpcDialog.open(npcId, result.dialog, result.quests);
       })
       .catch((error: { code?: number }) => {
         // 服务端距离闸拒绝：位置快照滞后导致的假拒，等一拍重试一次（仍静默），
