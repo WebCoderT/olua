@@ -10,7 +10,6 @@ import {
   UITransform,
   input,
   instantiate,
-  resources,
 } from "cc";
 import { npcs } from "../../../configs/game-config";
 import { npcDialogLayout, npcDialogTexts } from "../../../configs/layout/dialogs/npcDialog";
@@ -33,15 +32,15 @@ type DialogAction = { kind: "accept" | "submit"; questId: string };
 /**
  * 通用 NPC 对话框（#1337）
  *
- * 面板本体在 `resources/ui/NpcDialog.prefab`，改版式直接在 Cocos 编辑器里改 prefab；
- * 本类只负责四件事：加载实例 → 贴到屏幕底边 → 填文案/翻页 → 任务快捷按钮。
+ * 面板本体是 `ui/prefabs/NpcDialog.prefab`（代码资产，正常入库；改版式在 Cocos 编辑器里改），
+ * 由 Game 场景的 `Game.npcDialogPrefab` 静态注入（#1348，不再走 resources.load）。
+ * 本类只负责四件事：拿到实例 → 贴到屏幕底边 → 填文案/翻页 → 任务快捷按钮。
  * 节点名集中在 `npcDialogLayout.nodes`；同名节点不存在时只警告，不让整块 UI 崩掉。
  */
 export default class NpcDialog {
   private static node: Node | null = null;
   private static npcId = "";
   private static prefab: Prefab | null = null;
-  private static loading: Promise<Prefab | null> | null = null;
   private static pages: string[] = [];
   private static pageIndex = 0;
   private static actions: DialogAction[] = [];
@@ -69,11 +68,17 @@ export default class NpcDialog {
       return;
     }
     NpcDialog.node = null;
-    NpcDialog.load().then((prefab) => {
-      if (!prefab) return;
-      if (!NpcDialog.node) NpcDialog.node = NpcDialog.mount(prefab);
-      NpcDialog.render();
-    });
+    if (!NpcDialog.prefab) {
+      console.warn("[npc-dialog] prefab 未注入：请确认 Game 场景的 npcDialogPrefab 字段已绑定");
+      return;
+    }
+    NpcDialog.node = NpcDialog.mount(NpcDialog.prefab);
+    NpcDialog.render();
+  }
+
+  /** 由 Game 场景在 start 时把 prefab 注入进来（#1348：静态引用，不走 resources.load） */
+  static setPrefab(prefab: Prefab | null): void {
+    NpcDialog.prefab = prefab;
   }
 
   static close(): void {
@@ -87,26 +92,6 @@ export default class NpcDialog {
   /** 场景销毁时可主动清引用（节点销毁监听里也会自清） */
   static clear(): void {
     NpcDialog.close();
-  }
-
-  private static load(): Promise<Prefab | null> {
-    if (NpcDialog.prefab) return Promise.resolve(NpcDialog.prefab);
-    if (NpcDialog.loading) return NpcDialog.loading;
-    NpcDialog.loading = new Promise<Prefab | null>((resolve) => {
-      resources.load(npcDialogLayout.prefabPath, Prefab, (err, prefab) => {
-        if (err || !prefab) {
-          console.warn("[npc-dialog] prefab 加载失败：", err && err.message);
-          resolve(null);
-          return;
-        }
-        NpcDialog.prefab = prefab;
-        resolve(prefab);
-      });
-    }).then((prefab) => {
-      NpcDialog.loading = null;
-      return prefab;
-    });
-    return NpcDialog.loading;
   }
 
   private static mount(prefab: Prefab): Node {
