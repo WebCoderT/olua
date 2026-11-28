@@ -40,7 +40,7 @@ export default class GameMap extends Node {
     DropManager.reset();
     OtherPlayerManager.reset();
     LayerManager.clearMapLayer();
-    // 路径按目录约定拼（#573）：玩法配置在服务端，但「加载哪张图」只取决于 id
+    // 路径由快照 src 决定（#1401）：出厂图按 id，派生图按来源 TMX 目录（否则新 id 没资源会黑屏）
     this.loadMap(mapSrcOf(role.onMap));
   }
 

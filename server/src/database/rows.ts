@@ -619,11 +619,20 @@ export interface MapSpawnAreaRow {
  * 地图玩法配置一行（`maps` 表；#573：地图的整理结果归服务端）
  *
  * 一行 = 一张图的「名称 / 类型 / 进入条件」。资源本体（TMX / 底图 / 预览图）仍在客户端
- * 资源包里，`map_id` 就是 `resources/map/<id>/<id>.tmx` 的目录名 —— 所以**没有新建语义**：
- * 行由启动 seed 按资源清单（`MAP_CONTENTS` 的键）补出来，运营只改不改增。
+ * 出厂行的 `map_id` 就是 `resources/map/<id>/<id>.tmx` 的目录名，由启动 seed 按资源清单补行；
+ * #1401 起运营可以新增派生行（`src_map_id` 指向一张已有地图的 TMX 目录），
+ * 走 `POST /admin/maps`，几何从来源行复制、玩法字段独立。
  */
 export interface MapRow {
   map_id: string;
+  /**
+   * 客户端资源来源地图 id（#1401，空 = 用自身 id）
+   *
+   * 允许「一张客户端地图 → 多张服务端配置」：新增行选一张已有地图作来源，几何原样复制，
+   * 本列指向来源的 map_id（来源是出厂行时本列为空）。客户端按此值拼 TMX 路径
+   * （`mapSrcOf` 优先读快照的 src），所以删来源图前必须先清掉所有以它为来源的派生图。
+   */
+  src_map_id: string;
   /** 地图名称（传送弹窗、小地图、公告等处显示的就是它） */
   label: string;
   /** 类型码（取值域见 common/constants/map-config 的 `MapType`） */

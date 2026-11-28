@@ -7219,9 +7219,13 @@ export type MapCollisionPolygon = {
 
 export type MapConfig = {
   /**
-   * 地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）
+   * 地图 id（= 角色 onMap 存的值）
    */
   id: string;
+  /**
+   * 客户端资源路径（#1401）：出厂图 = map/<id>/<id>；派生图的 id 没有同名 TMX 目录，此字段指向来源图的目录。客户端按它加载地图。
+   */
+  src: string;
   /**
    * 地图名
    */
@@ -10447,6 +10451,115 @@ export type MapMonitor = {
    * 下一次请求带上的游标（本次返回的最大事件 id；没有事件时原样回传 since）
    */
   cursor: number;
+};
+
+export type MapCreated = {
+  /**
+   * 地图 id（= resources/map 下的目录名，也是角色 onMap 存的值）
+   */
+  id: string;
+  /**
+   * 地图名
+   */
+  label: string;
+  /**
+   * 类型码（0 安全 / 1 野外）
+   */
+  type: string;
+  /**
+   * 类型名（安全地图 / 野外地图）
+   */
+  typeLabel: string;
+  /**
+   * 进入所需等级（0 = 不限）
+   */
+  level: number;
+  /**
+   * 客户端资源路径（如 map/0/0）
+   */
+  src: string;
+  /**
+   * 横向格数
+   */
+  cols: number;
+  /**
+   * 纵向格数
+   */
+  rows: number;
+  /**
+   * 单格宽（像素）
+   */
+  tileWidth: number;
+  /**
+   * 单格高（像素）
+   */
+  tileHeight: number;
+  /**
+   * 地图像素宽
+   */
+  width: number;
+  /**
+   * 地图像素高
+   */
+  height: number;
+  /**
+   * 图层数
+   */
+  layerCount: number;
+  /**
+   * 服务端 NPC 点位数（map_npcs；#672 起点位归后台）
+   */
+  npcPointCount: number;
+  /**
+   * 服务端是否设了复活点（maps.revive_cx/cy 非空）
+   */
+  hasRevivePoint: boolean;
+  /**
+   * 服务端碰撞盒行数（map_collisions；#676 起碰撞归后台）
+   */
+  collisionCount: number;
+  /**
+   * 服务端刷怪区行数（map_spawn_areas）
+   */
+  spawnAreaCount: number;
+  /**
+   * 服务端场上怪物实例数（world_monsters，全部区合计）
+   */
+  worldMonsterCount: number;
+};
+
+export type CreateMap = {
+  /**
+   * 新地图 id（数字串或带后缀的短名，如 0-2；不能与已有地图重复）
+   */
+  id: string;
+  /**
+   * 地图名称（显示在传送弹窗 / 小地图 / 公告里）
+   */
+  label: string;
+  /**
+   * 地图类型（0 安全地图 / 1 野外地图）
+   */
+  type: "0" | "1";
+  /**
+   * 进入所需等级（0 = 不限）
+   */
+  level: number;
+  /**
+   * 客户端资源来源地图 id（必须已存在；新图复制它的几何、共用它的 TMX 目录）
+   */
+  sourceMapId: string;
+};
+
+export type MapDeleted = {
+  /**
+   * 删除成功恒为 true
+   */
+  deleted: boolean;
+  /**
+   * 被删掉的地图 id
+   */
+  id: string;
 };
 
 export type MapReloadResult = {

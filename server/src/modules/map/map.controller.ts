@@ -8,8 +8,11 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Permission } from "../../common/constants/permission";
 import { AuthenticatedUser } from "../../common/interfaces/api-envelope.interface";
 import {
+  CreateMapDto,
   MapCollisionDeletedDto,
   MapCollisionDto,
+  MapCreatedDto,
+  MapDeletedDto,
   MapDetailDto,
   MapListDto,
   MapNpcDeletedDto,
@@ -44,9 +47,12 @@ import { MapService } from "./map.service";
  * - 碰撞盒 → `POST/PATCH/DELETE .../collisions`（#676，地图页拖框）。
  *
  * 不能改的是**资源本体**：TMX、底图、预览图。服务端连一列都没有 ——
- * 想改地图长什么样，路只有一条：换资源 → `node tools/import-map-resources.cjs` → 重新打包客户端。
- * 所以**没有「新建 / 删除地图」**（e2e 固化它们 404）：一张图存不存在由客户端的 TMX 决定，
- * 后台凭空建一行只会得到一张点开就黑屏的图。
+ * 想换地图长什么样，路只有一条：换资源 → `node tools/import-map-resources.cjs` → 重新打包客户端。
+ *
+ * #1401 起**能新增 / 删除地图行**（但依然不能动客户端资源）：新增时必须选一张已有地图作
+ * 为资源来源，新行复制它的几何、`src_map_id` 指向它的 TMX 目录，客户端按快照下发的 `src`
+ * 加载 —— 同一张客户端地图可以做多份独立玩法配置（刷怪区 / NPC / 规则各自独立）。
+ * 删除只删库里那一行；仍被引用（点位 / 区域 / 副本 / 派生图等）时 409 拒绝，不连带删。
  *
  * 历史：NPC 点位与复活点（#672）、碰撞盒（#676）以前都写在 TMX 的对象组里，客户端按组读。
  * 现在**地图文件里一个对象组都没有**（`tools/strip-map-objects.cjs` 整组删除），
@@ -112,6 +118,45 @@ export class AdminMapController {
   @ApiDataResponse(MapMonitorDto, { description: "这一帧的怪物 / 玩家 / 事件 + 游标与新鲜度" })
   monitor(@Param("id") id: string, @Query() query: MapMonitorQueryDto): MapMonitorDto {
     return this.mapService.monitor(id, query);
+  }
+
+  @Post()
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.create",
+    summary: "新增地图配置（选一张已有地图作资源来源，#1401）",
+    description:
+      "一张客户端地图可以做多份服务端配置：选一张已有地图作为来源（`sourceMapId`），新行复制它的" +
+      "几何与图层、`src_map_id` 指向它的 TMX 目录；名称 / 类型 / 等级按入参，复活点不继承（新图从零配）。\n\n" +
+      "**id 手填**（`50050` = 已被占用），只能是数字 / 字母 / `_` / `-`，不超过 32 字符；" +
+      "来源图不存在 → 404 `50032`。校验失败一律 400（中文消息）。\n\n" +
+      "**生效时机**：新行立刻进配置快照，客户端下次进游戏拉到；资源加载按快照的 `src` 走来源图的 TMX 目录，" +
+      "所以不需要给新 id 再做一份资源。" +
+      "**删除来源图前必须先把以它为来源的派生图删掉**（否则 409）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(MapCreatedDto, { description: "新建的这一行（列表摘要，计数全 0）" })
+  create(@Body() dto: CreateMapDto, @CurrentUser() actor: AuthenticatedUser): MapCreatedDto {
+    return this.mapService.createMap(dto, actor);
+  }
+
+  @Delete(":id")
+  @AuditTarget("map")
+  @ApiAdminDoc({
+    operationId: "adminMap.delete",
+    summary: "删除地图配置（只删库里的行，#1401）",
+    description:
+      "只删 `maps` 表里这一行，**客户端的 TMX / 底图 / 预览图完全不动** —— " +
+      "那属于资源包，要改得重新打包客户端。\n\n" +
+      "仍被引用时 409 `50051`，消息点名是哪一类引用（刷怪区 / NPC 点位 / 碰撞盒 / 玩法规则 / " +
+      "副本实例 / 场上怪物 / 角色位置 / 以它为资源来源的派生地图）；不连带删除、不留悬空。" +
+      "地图不存在 → 404 `50032`。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "要删除的地图 id" })
+  @ApiDataResponse(MapDeletedDto, { description: "删除结果（deleted + id）" })
+  delete(@Param("id") id: string, @CurrentUser() actor: AuthenticatedUser): MapDeletedDto {
+    return this.mapService.deleteMap(id, actor);
   }
 
   @Post(":id/reload-world")
@@ -204,7 +249,7 @@ export class AdminMapController {
       "- 四个数值字段都允许 `0`，**0 = 不限制**（安全地图就是 0/0/0，不是 1/0/0）；\n" +
       "- `type` 只能是 `0` 安全 / `1` 等级 / `2` 战斗力 / `3` 战魂；\n" +
       "- **整份覆盖**，不是部分更新：分字段更新会让两个人同时编辑时互相覆盖一半。\n\n" +
-      "地图 id 不存在 → 404（`50032`）。**没有新建 / 删除接口**：一张图存不存在由客户端的 TMX 决定。",
+      "地图 id 不存在 → 404（`50032`）。**整图的新增 / 删除**见 `POST /admin/maps` 与 `DELETE /admin/maps/:id`（#1401）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })
   @ApiParam({ name: "id", description: "地图 id（必须已有对应 TMX 资源）" })

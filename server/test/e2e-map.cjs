@@ -18,11 +18,12 @@
  * 3. **玩法配置保存即生效**：PATCH 之后列表 / 详情 / **玩家配置快照** 三处同步反映 ——
  *    第三处最关键，它决定「客户端下次进游戏能不能看到新门槛」。
  * 4. **资源本体写不动**：请求里塞 `src` 也会被丢掉（白名单剥离），返回仍是 `map/<id>/<id>`；
- *    POST / PUT / DELETE 一律 404（没有「新建 / 删除地图」这回事，图存不存在由 TMX 决定）。
+ *    PUT 一律 404。地图**行**自 #1401 起可增 / 删，但新增必须选一张已有地图作资源来源：
+ *    新行复制几何、`src` 指向来源 TMX 目录（同一张客户端地图可做多份玩法配置）。
  * 5. **参数越界要拒**：类型不在 0..3、等级 > 200、名称为空 → 400（不是静默存进去）。
  * 6. **权限**：观察员能读、写 403（写入口存在，但他是只读角色）；无令牌 401。
- * 7. **文档契约**：三个 operation（list / detail / save）、`save` 要 `gameConfig:write`、
- *    有 `SaveMapConfigDto`、**没有** Create / Delete 模型。
+ * 7. **文档契约**：list / detail / save + #1401 新增的 create / delete，`save` 要 `gameConfig:write`、
+ *    有 `SaveMapConfigDto` 与 `CreateMapDto`，写模型里没有 src / 尺寸 / 图层（资源本体不归后台）。
  *
  * 用法：npm run test:e2e:map（前置 npm run build）
  */
@@ -499,20 +500,76 @@ async function main() {
 
     //#region 五、能力边界
 
-    group("五、能力边界：没有新建 / 删除，也没有 PUT（资源本体不归后台）");
+    group("五、新增 / 删除地图行（#1401）：一张客户端地图可做多份配置；PUT 与资源本体仍不可写");
 
-    const post = await api(base, "POST", "/api/admin/maps", {
-      token: rootToken,
-      body: { label: "新地图", type: "0", level: 0 },
-    });
-    checkEqual(post.status, 404, "POST 新建地图 → 404（一张图存不存在由客户端的 TMX 决定）");
     const put = await api(base, "PUT", "/api/admin/maps/0", {
       token: rootToken,
       body: { label: "改个名", type: "0", level: 1 },
     });
-    checkEqual(put.status, 404, "PUT 整份替换 → 404（保存走 PATCH，语义是「改这五个字段」）");
-    const del = await api(base, "DELETE", "/api/admin/maps/0", { token: rootToken });
-    checkEqual(del.status, 404, "DELETE 删除地图 → 404");
+    checkEqual(put.status, 404, "PUT 整份替换 → 404（保存走 PATCH，语义是「改这三个字段」）");
+
+    // 同一份资源建两张派生图：A 直接来源 0，B 来源 A（验证来源链展平到最初的 TMX 目录）
+    const idA = "e2e-derived-a";
+    const idB = "e2e-derived-b";
+    for (const id of [idA, idB]) await api(base, "DELETE", `/api/admin/maps/${id}`, { token: rootToken }); // 上次跑残留的清理
+
+    const createdA = await api(base, "POST", "/api/admin/maps", {
+      token: rootToken,
+      body: { id: idA, label: "派生图A", type: "1", level: 7, sourceMapId: "0" },
+    });
+    checkEqual(createdA.status, 201, "选一张已有地图作来源 → 新建成功（POST 默认 201）");
+    checkEqual(createdA.body?.data?.src, "map/0/0", "新行 src 指向来源 TMX 目录（客户端按它加载，不会拿自己的 id 去黑屏）");
+    checkEqual(createdA.body?.data?.cols, map0.cols, "几何从来源图复制（运营不手填）");
+    checkEqual(createdA.body?.data?.level, 7, "进入等级按入参（与来源图各自独立）");
+    checkEqual(createdA.body?.data?.spawnAreaCount, 0, "新图不带来源的刷怪区（各自独立配置）");
+
+    const duplicated = await api(base, "POST", "/api/admin/maps", {
+      token: rootToken,
+      body: { id: idA, label: "重名", type: "1", level: 0, sourceMapId: "0" },
+    });
+    checkEqual(duplicated.status, 409, "id 撞已有行 → 409");
+    checkEqual(duplicated.body?.code, 50050, "用地图专属业务码 50050（不是 SQLite 主键英文错）");
+
+    const badId = await api(base, "POST", "/api/admin/maps", {
+      token: rootToken,
+      body: { id: "有空格 的id", label: "非法", type: "1", level: 0, sourceMapId: "0" },
+    });
+    checkEqual(badId.status, 400, "id 含空格 → 400（形态校验在落库前）");
+
+    const badSource = await api(base, "POST", "/api/admin/maps", {
+      token: rootToken,
+      body: { id: "e2e-derived-bad", label: "来源不存在", type: "1", level: 0, sourceMapId: "99999" },
+    });
+    checkEqual(badSource.status, 404, "来源图不存在 → 404");
+    checkEqual(badSource.body?.code, 50032, "来源不存在仍用地图专属码 50032");
+
+    const snapWithDerived = await api(base, "GET", "/api/game-config", { token: playerToken });
+    const snapDerived = (snapWithDerived.body?.data?.maps ?? []).find((row) => row.id === idA);
+    check(Boolean(snapDerived), "新行立刻进配置快照（下次进游戏能选到它）");
+    checkEqual(snapDerived?.src, "map/0/0", "快照下发来源 TMX 路径 —— 客户端 mapSrcOf 读它加载地图");
+
+    const createdB = await api(base, "POST", "/api/admin/maps", {
+      token: rootToken,
+      body: { id: idB, label: "派生图B", type: "1", level: 9, sourceMapId: idA },
+    });
+    checkEqual(createdB.status, 201, "派生图也能作为来源（多级派生）");
+    checkEqual(createdB.body?.data?.src, "map/0/0", "来源链展平到最初的 TMX 目录（不链式，也不黑屏）");
+
+    const delSource = await api(base, "DELETE", "/api/admin/maps/0", { token: rootToken });
+    checkEqual(delSource.status, 409, "删仍被派生图当作资源来源的地图 → 409");
+    checkEqual(delSource.body?.code, 50051, "用 MAP_IN_USE 业务码 50051");
+    check(delSource.body?.message?.includes("派生地图"), "中文消息点名是「以它为资源来源的派生地图」在引用");
+
+    const delB = await api(base, "DELETE", `/api/admin/maps/${idB}`, { token: rootToken });
+    checkEqual(delB.status, 200, "删无引用的派生图 B → 200");
+    checkEqual(delB.body?.data?.deleted, true, "删除回执 deleted=true");
+    const delA = await api(base, "DELETE", `/api/admin/maps/${idA}`, { token: rootToken });
+    checkEqual(delA.status, 200, "派生图的来源本身也是派生图，无其它引用 → 200（展平后互不依赖）");
+    const delAgain = await api(base, "DELETE", `/api/admin/maps/${idA}`, { token: rootToken });
+    checkEqual(delAgain.status, 404, "再删一次 → 404（行没了，不是幂等 200）");
+
+    const original = await api(base, "GET", "/api/admin/maps/0", { token: rootToken });
+    checkEqual(original.status, 200, "删派生图不影响来源图（原始地图行还在）");
 
     const outOfRange = await api(base, "GET", "/api/admin/maps/999", { token: rootToken });
     checkEqual(outOfRange.status, 404, "99 号图不存在 → 404");
@@ -558,13 +615,14 @@ async function main() {
 
     //#region 七、文档契约
 
-    group("七、文档契约：三个 operation，只有 save 是写");
+    group("七、文档契约：save / create / delete 三个写入口，权限与 DTO 形状都要对");
 
     const docs = await fetch(`${base}/api-docs-json`);
     const doc = await docs.json();
     const listPath = doc.paths?.["/api/admin/maps"];
     const detailPath = doc.paths?.["/api/admin/maps/{id}"];
-    check(Boolean(listPath?.get && listPath?.post === undefined), "列表有 get、没有 post");
+    check(Boolean(listPath?.get && listPath?.post), "列表有 get，新增地图走 post（#1401）");
+    check(Boolean(detailPath?.get && detailPath?.patch && detailPath?.delete && detailPath?.put === undefined), "详情有 get + patch + delete、没有 put");
     check(Boolean(detailPath?.get && detailPath?.patch && detailPath?.put === undefined), "详情有 get + patch、没有 put");
     checkEqual(listPath?.get?.["x-olua-permissions"]?.join(","), "gameConfig:read", "列表要求 gameConfig:read");
     checkEqual(detailPath?.get?.["x-olua-permissions"]?.join(","), "gameConfig:read", "详情同样只要读权限");
@@ -615,9 +673,11 @@ async function main() {
       "label,level,type",
       "写模型只有三个字段（#1177 删战斗力 / 战魂阶）：**没有 src / 尺寸 / 图层** —— 资源本体不是一个可编辑的字段",
     );
-    check(
-      Object.keys(schemas).every((name) => !/^(Create|Update|Delete)Map/.test(name)),
-      "文档里没有 Map 的新建 / 删除模型（后台造不出一张没有 TMX 的地图）",
+    check(Boolean(schemas.CreateMapDto), "有 CreateMapDto（#1401 新增地图必须选来源地图）");
+    checkEqual(
+      Object.keys(schemas.CreateMapDto?.properties ?? {}).sort().join(","),
+      "id,label,level,sourceMapId,type",
+      "新增模型的五个字段：id / 名称 / 类型 / 等级 / 来源地图 —— 几何不手填，资源路径不可写",
     );
 
     //#endregion

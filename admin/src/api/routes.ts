@@ -832,7 +832,7 @@ export const routes = {
      */
     resetStock: (id: string) => `/admin/mall/goods/${encodeURIComponent(id)}/stock-reset`,
   },
-  /** adminMap 模块（18 个接口） */
+  /** adminMap 模块（20 个接口） */
   adminMap: {
     /**
      * 地图列表（GET /admin/maps）
@@ -840,6 +840,18 @@ export const routes = {
      * 全部地图的概览：名称 / 类型 / 进入条件 / 尺寸 + 各类对象计数。
      */
     list: "/admin/maps",
+    /**
+     * 新增地图配置（选一张已有地图作资源来源，#1401）（POST /admin/maps）
+     *
+     * 一张客户端地图可以做多份服务端配置：选一张已有地图作为来源（`sourceMapId`），新行复制它的几何与图层、`src_map_id` 指向它的 TMX 目录；名称 / 类型 / 等级按入参，复活点不继承（新图从零配）。
+     */
+    create: "/admin/maps",
+    /**
+     * 删除地图配置（只删库里的行，#1401）（DELETE /admin/maps/{id}）
+     *
+     * 只删 `maps` 表里这一行，**客户端的 TMX / 底图 / 预览图完全不动** —— 那属于资源包，要改得重新打包客户端。
+     */
+    delete: (id: string) => `/admin/maps/${encodeURIComponent(id)}`,
     /**
      * 地图详情（GET /admin/maps/{id}）
      *

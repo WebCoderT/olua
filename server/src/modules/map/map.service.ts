@@ -65,8 +65,11 @@ import {
   MapMonitorPlayerDto,
 } from "./dto/map-monitor.dto";
 import {
+  CreateMapDto,
   MapCollisionDeletedDto,
   MapCollisionDto,
+  MapCreatedDto,
+  MapDeletedDto,
   MapCollisionPolygonDto,
   MapConfigDto,
   MapDetailDto,
@@ -227,7 +230,7 @@ export class MapService {
   /**
    * 玩法配置的精简列表（**配置快照用**）
    *
-   * 客户端进游戏要的是：凭 `id` 拼资源路径、凭 `label` 显示名字、凭 `type` 分桶、
+   * 客户端进游戏要的是：凭 `src` 加载资源（#1401，出厂图按 id、派生图按来源 TMX 目录）、凭 `label` 显示名字、凭 `type` 分桶、
    * 凭三个数值判「能不能进」，以及点位与碰撞盒（NPC / 复活点 / 刷怪区中心 / 碰撞矩形）——
    * 这四样以前客户端是从 TMX 的对象组里读的。**#676 起 TMX 里一个对象组都没了**
    * （地图文件只做显示），所以客户端除了瓦片之外的一切都来自这一段。
@@ -241,6 +244,8 @@ export class MapService {
       const rules = rulesOf.get(row.map_id) ?? mapRulesOf(null);
       return {
         id: row.map_id,
+        // #1401：客户端按 src 加载 TMX（出厂图 = 自身 id，派生图 = 来源 TMX 目录）
+        src: this.srcOf(row),
         label: row.label,
         type: row.type,
         typeLabel: MAP_TYPE_LABELS[row.type as MapTypeValue] ?? row.type,
@@ -846,6 +851,63 @@ export class MapService {
     );
   }
 
+  /**
+   * 新增一张地图配置（#1401：一张客户端地图 → 多份服务端配置）
+   *
+   * `sourceMapId` 必须是一张已有的地图（出厂行或派生行都行）。几何 / 图层整份复制，
+   * 玩法字段（名称 / 类型 / 等级）取本次入参；复活点**不继承** —— 它是玩法配置的一部分，
+   * 新图从零开始配，避免运营看到「刚建的图怎么自动有个复活点」。
+   *
+   * `src_map_id` 展平到来源真正的 TMX 目录（若来源本身是派生图，用它的 src_map_id），
+   * 所以派生图的派生图也能正常加载，不会出现链式 src。
+   */
+  createMap(dto: CreateMapDto, actor: AuthenticatedUser): MapCreatedDto {
+    const id = dto.id.trim();
+    const sourceId = dto.sourceMapId.trim();
+    if (this.maps.getById(id)) {
+      throw BizException.conflict(BizCode.MAP_ID_EXISTS, `地图 id ${id} 已被占用，换一个 id（现有地图可以在地图页左侧列表里看到）`);
+    }
+    const source = this.maps.getById(sourceId);
+    if (!source) {
+      throw new BizException(BizCode.MAP_NOT_FOUND, `资源来源地图 ${sourceId} 不存在 —— 只能选左侧列表里已有的一张图作为来源`, HttpStatus.NOT_FOUND);
+    }
+    const row: MapRow = {
+      ...source,
+      map_id: id,
+      src_map_id: source.src_map_id || source.map_id,
+      label: dto.label.trim(),
+      type: dto.type,
+      level: dto.level,
+      revive_cx: null,
+      revive_cy: null,
+      updated_by: actor.username,
+      updated_at: Date.now(),
+    };
+    this.maps.insert(row);
+    this.logger.log(`地图 ${id} 已新建：来源 ${sourceId}（资源 ${this.srcOf(row)}），名称 ${row.label}，类型 ${row.type}，等级 ${row.level}`);
+    return this.summaryOf(row, 0, 0, 0, 0);
+  }
+
+  /**
+   * 删除一张地图配置（#1401：只删库里这行，客户端 TMX 资源不动）
+   *
+   * 八类引用全部检查（配置四类 + 运行时三类 + 派生图），有任一非空就 409 —— 不连带删、
+   * 不留悬空：派生图还指着这张图的 TMX 目录时尤其不能删，否则派生图会变成黑屏。
+   */
+  deleteMap(id: string, actor: AuthenticatedUser): MapDeletedDto {
+    this.requireRow(id);
+    const refs = this.maps.referencingOf(id);
+    if (refs.length > 0) {
+      throw BizException.conflict(
+        BizCode.MAP_IN_USE,
+        `地图 ${id} 还被 ${refs.join("、")} 引用，先清理这些配置再删（本操作只删库里的地图行，不会删除客户端的 TMX 资源）`,
+      );
+    }
+    this.maps.remove(id);
+    this.logger.log(`地图 ${id} 已删除（操作人 ${actor.username}；客户端资源未动）`);
+    return { deleted: true, id };
+  }
+
   //#region 刷怪区（#667：后台直接画）
 
   /**
@@ -1386,8 +1448,16 @@ export class MapService {
     return row;
   }
 
-  /** 资源路径（约定：`resources/map/<id>/<id>.tmx`；客户端按同一规则拼，服务端只回显） */
-  private srcOf(id: string): string {
+  /**
+   * 资源路径（#1401 起以来源地图为准）
+   *
+   * 出厂图 `src_map_id` 为空 → 仍按 `map/<id>/<id>`，与改动前逐字一致；
+   * 派生图指向来源图的 TMX 目录 → `map/<来源id>/<来源id>`，客户端按这个字段加载，
+   * 而不是拿自己的 id 去拼一个不存在的目录（会黑屏）。来源若也是派生图，新增时已经
+   * 展平到最初的 TMX 目录，这里不会链式解析。
+   */
+  private srcOf(row: MapRow): string {
+    const id = row.src_map_id || row.map_id;
     return `map/${id}/${id}`;
   }
 
@@ -1479,7 +1549,7 @@ export class MapService {
     dto.type = row.type;
     dto.typeLabel = MAP_TYPE_LABELS[row.type as MapTypeValue] ?? row.type;
     dto.level = row.level;
-    dto.src = this.srcOf(id);
+    dto.src = this.srcOf(row);
     dto.cols = size.cols;
     dto.rows = size.rows;
     dto.tileWidth = size.tileWidth;

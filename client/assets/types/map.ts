@@ -92,6 +92,8 @@ export interface MapCollisionPolygon {
  * （正在图里的人要换图 / 重进）。
  */
 export interface MapConfig {
+  /** 客户端资源路径（#1401）：出厂图 = map/<id>/<id>，派生图指向来源 TMX 目录；mapSrcOf 读它 */
+  src: string;
   /** 地图名称（传送弹窗 / 小地图 / 预览图标题都读它） */
   label: string;
   /** 类型码（"0" 安全 / "1" 野外；#1177 收敛） */

@@ -189,6 +189,13 @@
       "key": "list",
       "issue": "#960",
       "reason": "区过滤在 buildWhere 里（第一个条件恒为 r.zone_id = ?，且 RoleFilter.zoneId 是必填），静态规则只看方法体看不到 —— 不要把它内联成字面量来骗过审计"
+    },
+    {
+      "rule": "repo-sql",
+      "file": "server/src/database/repositories/map.repository.ts",
+      "key": "referencingOf",
+      "issue": 1401,
+      "reason": "删地图前的全局引用检查（管理端配置操作）：地图行是全服共用的，任何区还有副本实例 / 场上怪物 / 角色停在这张图上都必须挡住删除 —— 按当前区过滤会漏掉别的区的占用，删完别的区就成黑屏。这是配置完整性守点，不是玩家侧按区取数据"
     }
   ]
 }

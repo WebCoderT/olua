@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Matches, Max, Min } from "class-validator";
 import {
   COLLISION_POLY_LIMITS,
   INSTANCE_LIMITS,
@@ -451,8 +451,14 @@ export class MapSummaryDto {
  * 对象组里读的，现在归后台了 —— 客户端不再有任何「问你 TMX 在哪」的路径。
  */
 export class MapConfigDto {
-  @ApiProperty({ description: "地图 id（= 角色 onMap 存的值 = resources/map 下的目录名）" })
+  @ApiProperty({ description: "地图 id（= 角色 onMap 存的值）" })
   id: string;
+
+  @ApiProperty({
+    description:
+      "客户端资源路径（#1401）：出厂图 = map/<id>/<id>；派生图的 id 没有同名 TMX 目录，此字段指向来源图的目录。客户端按它加载地图。",
+  })
+  src: string;
 
   @ApiProperty({ description: "地图名" })
   label: string;
@@ -1111,6 +1117,60 @@ export class CloseInstanceDto {
   @IsOptional()
   @IsIn(["cleared", "forced"], { message: "收场原因只能是 cleared 或 forced" })
   reason?: "cleared" | "forced";
+}
+
+//#endregion
+
+//#region 新增 / 删除地图（#1401）
+
+/**
+ * 新增一张地图配置（选一张已有地图作资源来源）
+ *
+ * id 手填不能自动生成：派生图的 id 是运营约定（比如 0 的变体叫 0-2），自动生成的数字
+ * 既没法与资源目录对应，也没法在任务/传送配置里提前写死。
+ */
+export class CreateMapDto {
+  @ApiProperty({ description: "新地图 id（数字串或带后缀的短名，如 0-2；不能与已有地图重复）", maxLength: 32 })
+  @IsString({ message: "地图 id 必须是字符串" })
+  @Length(1, 32, { message: "地图 id 不能为空且不超过 32 个字符" })
+  @Matches(/^[0-9A-Za-z_-]+$/, { message: "地图 id 只能包含数字、字母、下划线和短横线" })
+  id: string;
+
+  @ApiProperty({ description: "地图名称（显示在传送弹窗 / 小地图 / 公告里）", maxLength: MAP_LABEL_MAX_LENGTH })
+  @IsString({ message: "地图名称必须是字符串" })
+  @Length(1, MAP_LABEL_MAX_LENGTH, { message: `地图名称不能为空且不超过 ${MAP_LABEL_MAX_LENGTH} 个字` })
+  label: string;
+
+  @ApiProperty({
+    description: `地图类型（${MAP_TYPE_VALUES.map((type) => `${type} ${MAP_TYPE_LABELS[type as MapTypeValue]}`).join(" / ")}）`,
+    enum: MAP_TYPE_VALUES,
+  })
+  @IsIn(MAP_TYPE_VALUES, { message: `地图类型只能是 ${MAP_TYPE_VALUES.join(" / ")}` })
+  type: string;
+
+  @ApiProperty({ description: "进入所需等级（0 = 不限）", minimum: MAP_ENTER_LIMITS.level.min, maximum: MAP_ENTER_LIMITS.level.max })
+  @IsInt({ message: "进入等级必须是整数" })
+  @Min(MAP_ENTER_LIMITS.level.min, { message: `进入等级不能小于 ${MAP_ENTER_LIMITS.level.min}` })
+  @Max(MAP_ENTER_LIMITS.level.max, { message: `进入等级不能大于 ${MAP_ENTER_LIMITS.level.max}` })
+  level: number;
+
+  @ApiProperty({ description: "客户端资源来源地图 id（必须已存在；新图复制它的几何、共用它的 TMX 目录）" })
+  @IsString({ message: "来源地图 id 必须是字符串" })
+  @Length(1, 32, { message: "来源地图 id 不能为空且不超过 32 个字符" })
+  sourceMapId: string;
+}
+
+/** 新增结果 = 新行的列表摘要（直接铺回管理端列表，不再多拉一次） */
+export class MapCreatedDto extends MapSummaryDto {}
+
+/** 删除结果（呼应其它域的 *DeletedDto：deleted 恒 true） */
+export class MapDeletedDto {
+  @ApiProperty({ description: "删除成功恒为 true" })
+  @IsBoolean()
+  deleted: boolean;
+
+  @ApiProperty({ description: "被删掉的地图 id" })
+  id: string;
 }
 
 //#endregion
