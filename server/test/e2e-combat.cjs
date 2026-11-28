@@ -1466,6 +1466,23 @@ function connect(url) {
       JSON.stringify(pickedNear),
     );
 
+    // 全屏自动拾取（#1380）：开关开启时距离闸放宽到 1200px —— 800px 外也能拾
+    const fsOn = await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { fullScreenPickup: true } } });
+    check(fsOn.code === 0, "G：全屏自动拾取开关临时打开（#1380）", fsOn.message);
+    const mobFs = await aliveMonster(farPicker, "3");
+    const killedFs = mobFs ? await killMonster(farPicker, mobFs.monsterKey, mobFs.instanceId) : null;
+    const dropFs = dropIdIn(killedFs);
+    const pickedFs = dropFs
+      ? await pick(farPicker, dropFs, { spot: { mapId: "3", x: mobFs.x + 800, y: mobFs.y } })
+      : null;
+    check(
+      !!(pickedFs && pickedFs.ok && pickedFs.alreadyPicked === false),
+      "G：全屏自动拾取开启时 800px 外也能拾（闸放宽到 1200px，#1380）",
+      JSON.stringify(pickedFs),
+    );
+    const fsOff = await api(baseUrl, "PATCH", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE, body: { drop: { fullScreenPickup: false } } });
+    check(fsOff.code === 0, "G：全屏自动拾取开关已还原关闭（#1380）", fsOff.message);
+
     // 0 = 关闭校验（排查问题用的开关）：改完立刻生效（pick 现读库，不等客户端重进）
     // 基线从接口读（与后面还原 bindChance 同一手法：不引配置快照那份第二来源）
     const paramsBeforeRadius = await api(baseUrl, "GET", "admin/runtime-params", { token: adminToken, zoneId: ADMIN_ZONE });

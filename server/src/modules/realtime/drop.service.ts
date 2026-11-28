@@ -900,7 +900,15 @@ export class DropService implements OnApplicationBootstrap, OnApplicationShutdow
     const own = this.numberParam("pickAcceptRadius", DROP_PICK_RANGE_DEFAULT, 0, 2_000);
     if (own <= 0) return 0;
     const autoPickup = this.numberParam("autoPickupRadius", 40, 0, 500);
+    // 全屏自动拾取（#1380）：距离闸放宽到全屏半径——1920×1080 设计分辨率可视半径 ≈1101px（半对角），
+    // 1200 留余量；客户端常量 FULL_SCREEN_PICKUP_RADIUS 同值（configs/drop.ts，两端口径必须一致）
+    if (this.fullScreenPickup()) return Math.max(own, autoPickup, FULL_SCREEN_PICK_RANGE);
     return Math.max(own, autoPickup);
+  }
+
+  /** 全屏自动拾取开关（#1380）：与 announceBoss 同一读取口径，缺键按 false 兜底 */
+  private fullScreenPickup(): boolean {
+    return this.dropParams().fullScreenPickup === true;
   }
 
   private maxGroundPerMap(): number {
@@ -1028,6 +1036,13 @@ const ANNOUNCE_MIN_INTERVAL_MS = 30_000;
 const DROP_TTL_MS_DEFAULT = 180_000;
 const DROP_PROTECT_MS_DEFAULT = 30_000;
 const DROP_PICK_RANGE_DEFAULT = 120;
+
+/**
+ * 全屏自动拾取的距离闸（#1380）：`fullScreenPickup` 开启时 pickRange 的下限。
+ * 1920×1080 设计分辨率下可视半径 ≈1101px（半对角），1200 留余量；
+ * 客户端同值常量 `FULL_SCREEN_PICKUP_RADIUS`（configs/drop.ts），两端口径必须一致。
+ */
+const FULL_SCREEN_PICK_RANGE = 1_200;
 
 /**
  * 掉落流水（`drop_records`）的两道保留闸（#803）

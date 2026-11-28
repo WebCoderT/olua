@@ -200,7 +200,7 @@ export function RuntimeParamsPage() {
   const RESET_MODULES: Record<ModuleKey, { title: string; confirm: string; toast: string }> = {
     drop: {
       title: "还原掉落参数",
-      confirm: "把掉落手感 10 个字段整体写回推荐值，当前的自定义值会被覆盖；其余模块不受影响。",
+      confirm: "把掉落手感 11 个字段整体写回推荐值，当前的自定义值会被覆盖；其余模块不受影响。",
       toast: "掉落参数已还原为推荐配置（玩家下次进游戏拉配置时生效）",
     },
     autoBattle: {
@@ -363,6 +363,19 @@ export function RuntimeParamsPage() {
               >
                 <option value="true">发公告</option>
                 <option value="false">不发</option>
+              </Select>
+            </Field>
+            <Field
+              label="全屏自动拾取"
+              hint={recommended ? "开启后拾取距离闸放宽到全屏（1200 像素），屏幕内掉落物自动入包，玩家进游戏会提示一次；推荐关闭" : "开启后拾取距离闸放宽到全屏（1200 像素），屏幕内掉落物自动入包，玩家进游戏会提示一次"}
+            >
+              <Select
+                value={draft.drop.fullScreenPickup}
+                disabled={!canWrite}
+                onChange={(event) => setField("drop", "fullScreenPickup", event.target.value)}
+              >
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
               </Select>
             </Field>
             {DROP_FIELDS.map((field) => (
@@ -801,6 +814,7 @@ function toDraft(row: RuntimeParams): Draft {
       protectMs: String(row.drop.protectMs ?? 0),
       maxGroundPerMap: String(row.drop.maxGroundPerMap ?? 0),
       announceBoss: row.drop.announceBoss === false ? "false" : "true",
+      fullScreenPickup: row.drop.fullScreenPickup ? "true" : "false",
     },
     autoBattle: {
       moveByRun: row.autoBattle.moveByRun ? "true" : "false",
@@ -885,6 +899,7 @@ function buildPayload(
         protectMs,
         maxGroundPerMap,
         announceBoss: values.announceBoss === "true",
+        fullScreenPickup: values.fullScreenPickup === "true",
       },
     };
   }

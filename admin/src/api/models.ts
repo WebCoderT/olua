@@ -7320,6 +7320,10 @@ export type DropRuntimeParams = {
    * boss 掉落是否发全服公告（30 秒最多一条）
    */
   announceBoss: boolean;
+  /**
+   * 全屏自动拾取（#1380，默认 false）：开启后拾取距离闸放宽到全屏（1200px），屏幕内掉落物自动入包；进游戏会提示一次
+   */
+  fullScreenPickup: boolean;
 };
 
 export type AutoBattleParams = {
@@ -7747,6 +7751,10 @@ export type UpdateDropRuntimeParams = {
    * boss 掉落是否发全服公告
    */
   announceBoss?: boolean;
+  /**
+   * 全屏自动拾取（#1380，默认 false）
+   */
+  fullScreenPickup?: boolean;
 };
 
 export type UpdateAutoBattleParams = {

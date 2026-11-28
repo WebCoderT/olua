@@ -54,6 +54,14 @@ export interface DropRuntimeParams {
   maxGroundPerMap: number;
   /** boss 掉落是否发全服公告（默认 true；30 秒最多一条） */
   announceBoss: boolean;
+  /**
+   * 全屏自动拾取（#1380，默认 false = 现状只捡 autoPickupRadius 内）。
+   *
+   * 开启后服务端拾取距离闸放宽到 `FULL_SCREEN_PICK_RANGE`（1200px ≈ 设计分辨率可视半径），
+   * 客户端自动拾取半径同步放宽——屏幕内的掉落物全部自动入包。**两端口径必须一致**
+   * （客户端常量在 configs/drop.ts，注释互指）。
+   */
+  fullScreenPickup: boolean;
 }
 
 /** 自动战斗 / 寻路参数（客户端消费；服务端只负责下发） */
@@ -322,6 +330,7 @@ export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
     "protectMs",
     "maxGroundPerMap",
     "announceBoss",
+    "fullScreenPickup",
   ],
   autoBattle: [
     "maxTargetDistance",

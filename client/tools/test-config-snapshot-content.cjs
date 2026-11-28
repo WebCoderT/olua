@@ -405,6 +405,16 @@ function main() {
   check(dropRuntime.autoPickupRadius === 72 && dropRuntime.scatterMinDistance === 60, "负数 / 非数字不覆盖（坏配置不会把半径变成 0 或 NaN）", JSON.stringify(dropRuntime));
   applyDropRuntime({ autoPickupRadius: 0 });
   check(dropRuntime.autoPickupRadius === 0, "0 是合法值（可以作为「关闭自动拾取」用）");
+
+  // 全屏自动拾取（#1380）：布尔键只认 boolean——数字 1 不得被 Number() 转换写进布尔字段
+  check(dropRuntime.fullScreenPickup === false, "全屏自动拾取缺省 false（快照没给 = 与加键前行为一致）");
+  applyDropRuntime({ fullScreenPickup: true });
+  check(dropRuntime.fullScreenPickup === true, "全屏自动拾取按快照覆写（#1380）");
+  applyDropRuntime({ fullScreenPickup: 1 });
+  check(dropRuntime.fullScreenPickup === true, "数字 1 不覆写布尔键（Number() 一把转会把 true 变 1，覆写等于失效）");
+  applyDropRuntime({ fullScreenPickup: 0 });
+  check(dropRuntime.fullScreenPickup === true, "数字 0 同样不覆写（旧写法会把它转成 false，开关被坏数据悄悄关掉）");
+
   applyAutoBattleParams({ cellSize: 0, stuckRetryLimit: 0, classicStepLength: 0 });
   check(autoBattle.cellSize === 24 && autoBattle.stuckRetryLimit === 0 && autoBattle.classicStepLength === 120, "网格边长有下限 1（0 会让寻路失去意义），没配过的键保持 0", `cell=${autoBattle.cellSize}`);
 

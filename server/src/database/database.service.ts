@@ -1886,6 +1886,28 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         }
       }
     }
+    // 全屏自动拾取（#1380）：drop_params JSON 列里补键（改代码不会让存量库的 JSON 长出新键，
+    // 而 RUNTIME_PARAM_KEYS 启动自检会把缺键点名报错）。缺省 false = 加键前行为完全一致；幂等
+    {
+      const row = this.db.prepare("SELECT drop_params FROM runtime_params WHERE id = 1").get() as
+        | { drop_params: string }
+        | undefined;
+      if (row) {
+        let parsed: Record<string, unknown> = {};
+        try {
+          const value: unknown = JSON.parse(row.drop_params || "{}");
+          if (value && typeof value === "object" && !Array.isArray(value)) parsed = value as Record<string, unknown>;
+        } catch {
+          parsed = {};
+        }
+        if (parsed.fullScreenPickup === undefined) {
+          parsed.fullScreenPickup = false;
+          this.db
+            .prepare("UPDATE runtime_params SET drop_params = ? WHERE id = 1")
+            .run(JSON.stringify(parsed));
+        }
+      }
+    }
     // 掉落强制绑定（#789）：五张道具表各一列「掉出来就绑定」+ 每怪一列「这只怪掉的东西都绑定」。
     // 默认 0 = 不强制 —— 存量库补列后行为与之前完全一样（绑定只由 drop_params.bindChance 掷）
     this.ensureColumn("equipments", "bind_on_drop", "INTEGER NOT NULL DEFAULT 0");
