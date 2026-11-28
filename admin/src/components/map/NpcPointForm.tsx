@@ -62,13 +62,20 @@ export function NpcPointFormDialog({
   const [saving, setSaving] = useState(false);
   const [askingDelete, setAskingDelete] = useState(false);
 
-  /** 打开时按当前形态重置：编辑读那一行，新建用画布落点；NPC 沿用上一次选的（连着放几个多半是同一个） */
+  /**
+   * 打开时按当前形态重置：编辑读那一行，新建用画布落点。
+   *
+   * **新建态不再沿用上一次选的 NPC**（#1404）：同一个 NPC 一张图只能放一个（服务端唯一索引），
+   * 沿用来的 id 在这张图上**必然是 taken** —— 预填只会让下一次放下按钮直接置灰 + 红字，
+   * 看起来像「刚放下的那个出问题了」。放下成功后表单自动关（见 submit），连放下一个 NPC
+   * 的流程是「再点画布 → 新表单（NPC 空）→ 重新挑」。
+   */
   useEffect(() => {
     if (!open) return;
     const at = point ? tiledPointOf(point) : draft;
     setX(String(round(at?.x ?? 0)));
     setY(String(round(at?.y ?? 0)));
-    setNpcId((previous) => point?.npcId ?? previous);
+    setNpcId(point?.npcId ?? "");
     setAskingDelete(false);
     // 只跟开合与目标点位走：把 x / y 放进来会让「用户正在输入」被自己覆盖
   }, [open, point?.id, draft?.x, draft?.y]);
@@ -94,6 +101,9 @@ export function NpcPointFormDialog({
         : await mapsApi.createNpc(mapId, body);
       toastSuccess(`NPC「${saved.npcLabel}」已${point ? "更新" : "放下"}：(${saved.cx}, ${saved.cy})`);
       onSaved(`${point ? "已更新" : "已放下"} NPC「${saved.npcLabel}」`);
+      // 成功即关表单（#1404）：残留的表单让人以为「还没生效」，再点一次放下就是
+      // 409「这张图里已经有这个 NPC 了」—— 操作完成的语义由界面收尾说清楚
+      onClose();
     } catch {
       /* 错误已由请求层统一提示（越界 / 同一个 NPC 已在这张图上都有中文文案） */
     } finally {
@@ -108,6 +118,8 @@ export function NpcPointFormDialog({
       await mapsApi.deleteNpc(mapId, String(point.id));
       toastSuccess(`NPC「${point.npcLabel}」已从这张图移除`);
       onSaved(`已移除 NPC「${point.npcLabel}」`);
+      // 点位已不存在：表单留着只会让人对着空行再点一次删除（#1404 与 submit 同一收尾）
+      onClose();
     } catch {
       /* 同上 */
     } finally {
