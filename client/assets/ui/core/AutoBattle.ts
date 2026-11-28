@@ -7,6 +7,7 @@ import { SkillId, SkillTargetType } from "../../types/skill";
 import type RoleDisplay from "../components/role/RoleDisplay";
 import { canAttackTarget } from "../utils/battle/BattleMath";
 import { getMapWorldRect } from "../utils/map/MapPointMath";
+import { getWorldColliderRect } from "../utils/physics/MoveBlocking";
 import PathGrid, { type PolyPoint } from "../utils/map/PathGrid";
 import GameUiHelper from "../helpers/GameUiHelper";
 import MonsterManager from "./MonsterManager";
@@ -71,10 +72,21 @@ export default class AutoBattle {
    * 照过期路点走会把角色带回上一个目标的方向。
    */
   private static pendingPathSeq = 0;
+
+  /**
+   * 当前图 NPC 障碍节点（#1366）：NPC 是物理障碍（MapObjectSpawner 的 addObstacleCollider，
+   * 物理引擎挡人）但不在碰撞网格里 —— A* 路径径直穿过 NPC 格，角色顶在 NPC 上一直播走路动画。
+   * MapObjectSpawner 生成 NPC 时登记、spawnAll 开头清（换图重建）；NPC 静止不动，
+   * 寻路前与怪物一起烙进网格（与怪物同口径 raw rect）。登记在这里而不是 spawner：
+   * 避免 core → components 的循环依赖（spawner 本就 import AutoBattle）
+   */
+  private static npcObstacles: Node[] = [];
   /** 卡住检测：上次检测时间/位置与连续卡住次数 */
   private static lastStuckCheckAt = 0;
-  private static lastStuckX = 0;
-  private static lastStuckY = 0;
+  /** 上次卡住检查时的当前路点（值快照；判「路点换了要重置基准」用，#1366） */
+  private static lastStuckWaypoint: Vec2 | null = null;
+  /** 上次卡住检查时距当前路点的距离（推进量 = 上次距离 - 这次距离，#1366） */
+  private static lastStuckDist = 0;
   private static stuckCount = 0;
   /** 下次允许自动选目标的时间戳（无怪/目标刚失效时限频，避免每帧全图扫描） */
   private static nextTargetSearchAt = 0;
@@ -249,8 +261,29 @@ export default class AutoBattle {
   static findWalkablePoint(point: Vec2, radius: number = autoBattle.teleportSnapRadius): Vec2 | null {
     const grid = this.ensureGrid();
     if (!grid) return null;
-    grid.rebuild(MonsterManager.getBlockingRects(null));
+    grid.rebuild([...MonsterManager.getBlockingRects(null), ...this.getNpcBlockingRects()]);
     return grid.findNearestWalkablePoint(point.x, point.y, radius);
+  }
+
+  /** 登记一个 NPC 障碍节点（MapObjectSpawner 生成 NPC 后调用，#1366） */
+  static registerNpcObstacle(node: Node) {
+    this.npcObstacles.push(node);
+  }
+
+  /** 清空 NPC 障碍列表（换图 spawnAll 开头调用；旧节点随旧地图销毁，不能留引用） */
+  static clearNpcObstacles() {
+    this.npcObstacles = [];
+  }
+
+  /** 当前图全部 NPC 的阻挡矩形（无效节点跳过；寻路烙格与服务端回执校验共用） */
+  private static getNpcBlockingRects(): Rect[] {
+    const rects: Rect[] = [];
+    this.npcObstacles.forEach((node) => {
+      if (!isValid(node)) return;
+      const rect = getWorldColliderRect(node);
+      if (rect) rects.push(rect);
+    });
+    return rects;
   }
 
   /** 每帧驱动（组合根在 Game.update 调用；manualMoving 为玩家是否正在手动移动：键盘方向键或鼠标按下操控） */
@@ -423,9 +456,18 @@ export default class AutoBattle {
   private static advance(roleDisplay: RoleDisplay, to: Vec2, repath: () => void, onGiveUp: () => void) {
     const now = Date.now();
     const position = roleDisplay.getWorldPosition();
-    // 卡住检测：一段时间几乎没有位移说明被挡住（怪堆/死角），强制重寻路，连续多次就放弃
+    // 卡住检测（#1366 判据改「朝路点推进量」）：一段时间几乎没有朝当前路点推进说明被挡住——
+    // 原地顶住推进为 0；贴着障碍打滑（resolveBlockedMove 分轴滑动/物理滑动）推进也≈0，
+    // 旧判据看「总位移」，贴障滑行时位移不小永远不判卡，角色沿障碍滑出去多远都停在「移动中」。
+    // 路点换了（重寻路/到步切换）重置基准与计数：按坐标值比较（repathTo 每次新建 Vec2，
+    // 按引用比较会把「同一个格心」误判成换路点，fallback 循环里的 give-up 就攒不满了）
+    const stuckWaypoint = this.path[this.pathIndex] ?? to;
+    const stuckDistance = Math.hypot(position.x - stuckWaypoint.x, position.y - stuckWaypoint.y);
     if (now - this.lastStuckCheckAt >= autoBattle.stuckInterval) {
-      if (this.lastStuckCheckAt > 0 && Math.hypot(position.x - this.lastStuckX, position.y - this.lastStuckY) < autoBattle.stuckDistance) {
+      const sameWaypoint =
+        !!this.lastStuckWaypoint &&
+        Math.hypot(stuckWaypoint.x - this.lastStuckWaypoint.x, stuckWaypoint.y - this.lastStuckWaypoint.y) < 1;
+      if (this.lastStuckCheckAt > 0 && sameWaypoint && this.lastStuckDist - stuckDistance < autoBattle.stuckDistance) {
         this.stuckCount++;
         this.lastRepathAt = 0;
         if (this.stuckCount >= autoBattle.stuckRetryLimit) {
@@ -436,8 +478,8 @@ export default class AutoBattle {
         this.stuckCount = 0;
       }
       this.lastStuckCheckAt = now;
-      this.lastStuckX = position.x;
-      this.lastStuckY = position.y;
+      this.lastStuckWaypoint = new Vec2(stuckWaypoint.x, stuckWaypoint.y);
+      this.lastStuckDist = stuckDistance;
     }
     // 路线按需重算（#1352）：不再按时间盲算——点击寻路有路就不算，追怪目标换格才算；
     // repathInterval 只是最小节流间隔。卡住检测（上面）会把 lastRepathAt 清零强制重算
@@ -497,8 +539,9 @@ export default class AutoBattle {
       this.lastTargetCell = null;
       return;
     }
-    // 动态障碍每次寻路前重烙：怪物围成的「墙」也会被绕开；追击目标自身不算障碍，路径才能通到它身边
-    grid.rebuild(MonsterManager.getBlockingRects(this.target));
+    // 动态障碍每次寻路前重烙：怪物围成的「墙」也会被绕开；追击目标自身不算障碍，路径才能通到它身边。
+    // NPC 同口径烙入（#1366）：NPC 是物理障碍但服务端/本地网格原本都不认识，路径会径直穿过 NPC 格
+    grid.rebuild([...MonsterManager.getBlockingRects(this.target), ...this.getNpcBlockingRects()]);
     const from = roleDisplay.getWorldPosition();
     // 经典走路模式（#1334）：一格一步，本地预判这份路点同样保持逐格格心（与服务端权威路径同口径）
     const path = grid.findPath(new Vec2(from.x, from.y), new Vec2(to.x, to.y), {
@@ -597,6 +640,18 @@ export default class AutoBattle {
       return;
     }
     if (frame.points.length === 0) return;
+    // 服务端网格不认识 NPC（NPC 是纯客户端演出实体），回执路径可能径直穿过 NPC 格——
+    // 直接采纳会顶掉本地已绕开 NPC 的路径：顶住 → stuck 强制重寻路 → 本地绕开 →
+    // 回执又顶掉 → 无限震荡，路点来回换连 stuckCount 都攒不满（#1366「永远移动中」的元凶）。
+    // 口径：玩家移动本就是客户端演算（#1146），服务端回执是防穿墙的权威路线；NPC 不在
+    // 服务端碰撞模型里，客户端用本地 NPC 知识拒收含 NPC 格的回执、保留本地路径，不触碰服务端校验
+    const npcRects = this.getNpcBlockingRects();
+    if (
+      npcRects.length > 0 &&
+      frame.points.some((point) => npcRects.some((rect) => rect.contains(new Vec2(point.x, point.y))))
+    ) {
+      return;
+    }
     this.path = frame.points.map((point) => new Vec2(point.x, point.y));
     this.pathIndex = 0;
     // 服务端路径从「服务端最后一次接受的位置」起算（#1349）：4Hz 上报 + RTT，回执到达时
