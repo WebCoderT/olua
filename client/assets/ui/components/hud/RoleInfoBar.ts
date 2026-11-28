@@ -76,9 +76,23 @@ export default class RoleInfoBar extends Node {
     this.applyFixedPosition();
 
     const nodes = roleInfoBarPrefab.nodes;
-    const node = (path: string): Node | null => this.getChildByPath(path);
-    const sprite = (path: string): Sprite | null => (node(path) && node(path)!.getComponent(Sprite)) || null;
-    const label = (path: string): Label | null => (node(path) && node(path)!.getComponent(Label)) || null;
+    // 取用器找不到节点/组件只告警不崩（#1357）：报出具体路径，层级错位一眼定位，
+    // 别再出一个无从下手的 `Cannot set properties of null`
+    const node = (path: string): Node | null => {
+      const found = this.getChildByPath(path);
+      if (!found) console.warn(`[role-info-bar] prefab 缺节点: ${path}`);
+      return found;
+    };
+    const sprite = (path: string): Sprite | null => {
+      const comp = node(path)?.getComponent(Sprite) ?? null;
+      if (!comp) console.warn(`[role-info-bar] 节点缺 Sprite 组件: ${path}`);
+      return comp;
+    };
+    const label = (path: string): Label | null => {
+      const comp = node(path)?.getComponent(Label) ?? null;
+      if (!comp) console.warn(`[role-info-bar] 节点缺 Label 组件: ${path}`);
+      return comp;
+    };
 
     this.nameLabel = label(nodes.name)!;
     this.levelLabel = label(nodes.level)!;

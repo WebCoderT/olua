@@ -21,14 +21,17 @@ import { T } from "./tokens";
  * 改版式请直接改 prefab；这里只放运行时代码必须知道的**节点名**与动态色。
  */
 export const roleInfoBarPrefab = {
-  /** prefab 里的固定节点名：组件靠这些名字取引用，重命名节点要同步这里 */
+  /**
+   * prefab 里的固定节点路径（相对 prefab 根，逐段匹配**不递归**，嵌套节点必须带父级——#1357）：
+   * 组件靠这些路径取引用，prefab 改层级/重命名节点要同步这里
+   */
   nodes: {
     name: "Name",
     level: "Level",
-    currencyValue: "CurrencyValue",
-    combatValue: "CombatValue",
+    currencyValue: "CurrencyBar/CurrencyValue",
+    combatValue: "Combat/CombatValue",
     combatDivider: "CombatDivider",
-    avatar: "Avatar",
+    avatar: "AvatarFrame/Avatar",
     statusDot: "RealtimeStatus/StatusDot",
     statusText: "RealtimeStatus/StatusText",
     statusIcons: "StatusIcons",
