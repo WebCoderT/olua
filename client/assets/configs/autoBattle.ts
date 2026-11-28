@@ -27,6 +27,11 @@ export const autoBattle = {
    * `runtime_params.auto_battle.classicWalkMode`，两端口径必须一致。
    */
   classicWalkMode: false,
+  /**
+   * 经典走路模式每一步的距离（像素；#1340 快照覆写）：点击一下 = 移动这么多，
+   * 按住则每走满一步接下一步（方向在步边界切换）。经典模式关闭时本键不生效。
+   */
+  classicStepLength: 0,
   /** A* 网格单元边长（像素），越小越贴合障碍、搜索越慢；快照覆写 */
   cellSize: 0,
   /** 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格，避免自动走位贴墙卡住；快照覆写 */
@@ -85,6 +90,7 @@ export interface AutoBattleTuning {
   maxTargetDistance: number;
   moveByRun: boolean;
   classicWalkMode: boolean;
+  classicStepLength: number;
   cellSize: number;
   clearance: number;
   repathInterval: number;
@@ -122,6 +128,8 @@ export function applyAutoBattleParams(params: Partial<AutoBattleTuning> | undefi
   autoBattle.maxTargetDistance = num(params.maxTargetDistance, autoBattle.maxTargetDistance);
   if (typeof params.moveByRun === "boolean") autoBattle.moveByRun = params.moveByRun;
   if (typeof params.classicWalkMode === "boolean") autoBattle.classicWalkMode = params.classicWalkMode;
+  // 步长必须 ≥ 1（0 会让「每步固定距离」失去意义，一步都走不完）
+  autoBattle.classicStepLength = rate(params.classicStepLength, autoBattle.classicStepLength);
   // 网格边长与重试次数必须 ≥ 1（0 会让寻路 / 放弃逻辑失去意义）
   autoBattle.cellSize = rate(params.cellSize, autoBattle.cellSize);
   autoBattle.clearance = num(params.clearance, autoBattle.clearance);

@@ -71,6 +71,8 @@ export interface AutoBattleParams {
    * 客户端与 #811 服务端权威路径消费**同一个开关**，两端口径必须一致。
    */
   classicWalkMode: boolean;
+  /** 经典走路模式每一步的距离（像素） */
+  classicStepLength: number;
   /** A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢 */
   cellSize: number;
   /** 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格 */
@@ -325,6 +327,7 @@ export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
     "maxTargetDistance",
     "moveByRun",
     "classicWalkMode",
+    "classicStepLength",
     "cellSize",
     "clearance",
     "repathInterval",

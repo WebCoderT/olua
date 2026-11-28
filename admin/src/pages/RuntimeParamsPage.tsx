@@ -205,7 +205,7 @@ export function RuntimeParamsPage() {
     },
     autoBattle: {
       title: "还原自动战斗参数",
-      confirm: "把自动战斗与寻路 14 个字段整体写回推荐值，当前的自定义值会被覆盖；其余模块不受影响。",
+      confirm: "把自动战斗与寻路 15 个字段整体写回推荐值，当前的自定义值会被覆盖；其余模块不受影响。",
       toast: "自动战斗参数已还原为推荐配置（玩家下次进游戏拉配置时生效）",
     },
     guild: {
@@ -719,6 +719,7 @@ const DROP_FIELDS: FieldSpec[] = [
 const AUTO_FIELDS: FieldSpec[] = [
   { key: "maxTargetDistance", label: "选目标最大距离（像素）", hint: "0 = 不限，全图取最近" },
   { key: "cellSize", label: "A* 网格边长（像素）", hint: "越小越贴合障碍、搜索越慢" },
+  { key: "classicStepLength", label: "经典模式步长（像素）", hint: "经典走路模式下每一步移动的距离；点击一下走一步，按住连续走步" },
   { key: "clearance", label: "通行余量（像素）", hint: "障碍外扩，避免贴墙卡住" },
   { key: "repathInterval", label: "重寻路间隔（毫秒）", hint: "目标会移动，路径要定期重算" },
   { key: "waypointTolerance", label: "路点判定半径（像素）", hint: "进入半径即走向下一个路点" },
@@ -804,6 +805,7 @@ function toDraft(row: RuntimeParams): Draft {
     autoBattle: {
       moveByRun: row.autoBattle.moveByRun ? "true" : "false",
       classicWalkMode: row.autoBattle.classicWalkMode ? "true" : "false",
+      classicStepLength: String(row.autoBattle.classicStepLength),
       maxTargetDistance: String(row.autoBattle.maxTargetDistance),
       cellSize: String(row.autoBattle.cellSize),
       clearance: String(row.autoBattle.clearance),
@@ -907,6 +909,7 @@ function buildPayload(
   }
   const maxTargetDistance = num("maxTargetDistance");
   const cellSize = num("cellSize");
+  const classicStepLength = num("classicStepLength");
   const clearance = num("clearance");
   const repathInterval = num("repathInterval");
   const waypointTolerance = num("waypointTolerance");
@@ -921,6 +924,7 @@ function buildPayload(
   if (
     maxTargetDistance === null ||
     cellSize === null ||
+    classicStepLength === null ||
     clearance === null ||
     repathInterval === null ||
     waypointTolerance === null ||
@@ -939,6 +943,7 @@ function buildPayload(
     autoBattle: {
       moveByRun: values.moveByRun === "true",
       classicWalkMode: values.classicWalkMode === "true",
+      classicStepLength,
       maxTargetDistance,
       cellSize,
       clearance,

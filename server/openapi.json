@@ -30313,6 +30313,11 @@
             "description": "经典走路模式：开启后移动为一格一步的格子走动（必须走完一步才走下一步，停点为格心）；关闭为连续移动",
             "example": false
           },
+          "classicStepLength": {
+            "type": "number",
+            "description": "经典走路模式每一步的距离（像素）",
+            "example": 100
+          },
           "cellSize": {
             "type": "number",
             "description": "A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢",
@@ -30378,6 +30383,7 @@
           "maxTargetDistance",
           "moveByRun",
           "classicWalkMode",
+          "classicStepLength",
           "cellSize",
           "clearance",
           "repathInterval",
@@ -31054,6 +31060,10 @@
           "classicWalkMode": {
             "type": "boolean",
             "description": "经典走路模式：一格一步的格子走动"
+          },
+          "classicStepLength": {
+            "type": "number",
+            "description": "经典走路模式每一步的距离（像素）"
           },
           "cellSize": {
             "type": "number",

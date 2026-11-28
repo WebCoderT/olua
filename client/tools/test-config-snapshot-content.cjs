@@ -362,7 +362,7 @@ function main() {
   const dropRef = dropRuntime;
   const tuning = {
     drop: { autoPickupRadius: 72, scatterMinDistance: 60, pickReplyTimeout: 3000, fullTipInterval: 800 },
-    autoBattle: { maxTargetDistance: 300, moveByRun: false, classicWalkMode: true, cellSize: 24, clearance: 12, repathInterval: 200 },
+    autoBattle: { maxTargetDistance: 300, moveByRun: false, classicWalkMode: true, classicStepLength: 120, cellSize: 24, clearance: 12, repathInterval: 200 },
   };
   snapshotApi.applyRuntimeParams(tuning);
   check(dropRef === dropRuntime, "dropRuntime 对象引用不变（消费方持有的是同一个对象）");
@@ -371,6 +371,7 @@ function main() {
   check(autoBattle.maxTargetDistance === 300 && autoBattle.cellSize === 24, "自动战斗距离与网格边长覆写", `dist=${autoBattle.maxTargetDistance} cell=${autoBattle.cellSize}`);
   check(autoBattle.moveByRun === false, "布尔开关（移动用跑步）也能覆写");
   check(autoBattle.classicWalkMode === true, "布尔开关（经典走路模式）也能覆写（#1334）");
+  check(autoBattle.classicStepLength === 120, "经典模式步长覆写（#1340 点击一下走一步的距离）", `step=${autoBattle.classicStepLength}`);
   check(autoBattle.stuckRetryLimit === 0 && autoBattle.dashSnapRadius === 0, "快照里没给的键保持当前值（#724 无出厂值，初始 0 = 快照没给）", `retry=${autoBattle.stuckRetryLimit}`);
   check(autoBattle.routeLine && autoBattle.routeLine.dotRadius === 3, "样式参数（routeLine）不受快照影响 —— 它不在下发范围");
 
@@ -379,8 +380,8 @@ function main() {
   check(dropRuntime.autoPickupRadius === 72 && dropRuntime.scatterMinDistance === 60, "负数 / 非数字不覆盖（坏配置不会把半径变成 0 或 NaN）", JSON.stringify(dropRuntime));
   applyDropRuntime({ autoPickupRadius: 0 });
   check(dropRuntime.autoPickupRadius === 0, "0 是合法值（可以作为「关闭自动拾取」用）");
-  applyAutoBattleParams({ cellSize: 0, stuckRetryLimit: 0 });
-  check(autoBattle.cellSize === 24 && autoBattle.stuckRetryLimit === 0, "网格边长有下限 1（0 会让寻路失去意义），没配过的键保持 0", `cell=${autoBattle.cellSize}`);
+  applyAutoBattleParams({ cellSize: 0, stuckRetryLimit: 0, classicStepLength: 0 });
+  check(autoBattle.cellSize === 24 && autoBattle.stuckRetryLimit === 0 && autoBattle.classicStepLength === 120, "网格边长有下限 1（0 会让寻路失去意义），没配过的键保持 0", `cell=${autoBattle.cellSize}`);
 
   //#endregion
 
