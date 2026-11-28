@@ -1295,6 +1295,16 @@ export const npcs = new Map<string, NpcData>();
 export const npcClicks: Record<string, () => void> = {};
 
 /**
+ * 入口功能 → 弹窗工厂（#1369，由 `configs/npcClicks` 在模块加载时登记）
+ *
+ * 服务端 `npcs.feature`（title 称号 / soul 战魂 / rank 军衔）绑哪个 NPC，玩家点它就开哪个窗。
+ * 与 `npcClicks` 同一取向：注册表在本文件（不引 UI），工厂在 `npcClicks.ts`（那边才引弹窗）。
+ * 点击时 **feature 优先**：绑了 feature 的 NPC 不再走 `npcClicks` 的 id 硬编码
+ * （避免同一颗 NPC 叠开两个窗）；没绑的走 `npcClicks` 兜底（0002 传送、9002 战魂出厂行为不变）。
+ */
+export const npcFeatureHandlers: Record<string, () => void> = {};
+
+/**
  * 快照 npcs 段 → 运行时表（**整表重建**，先 clear）
  *
  * 整表重建而不是「覆写已有行」：客户端已经没有兜底数据，覆写等于「快照缺行就静默少一个 NPC」。
@@ -1308,10 +1318,17 @@ export function applyNpcRows(rows: NpcRow[]): void {
       id: row.id,
       label: row.label,
       src: row.src,
+      feature: row.feature ?? "",
       scale: new Vec3(row.scaleX, row.scaleY),
       position: new Vec3(row.posX, row.posY),
-      // 延迟解析：行为在 npcClicks 里，那个文件可能比快照晚加载
+      // 延迟解析：行为在 npcClicks 里，那个文件可能比快照晚加载；
+      // feature 绑定（#1369）优先于 id 硬编码，绑了就不叠开 npcClicks 的窗
       onClick: () => {
+        const featureHandler = npcFeatureHandlers[row.feature ?? ""];
+        if (featureHandler) {
+          featureHandler();
+          return;
+        }
         const handler = npcClicks[row.id];
         if (handler) handler();
       },

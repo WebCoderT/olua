@@ -1123,6 +1123,7 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         scale_y    REAL    NOT NULL DEFAULT 1,
         pos_x      REAL    NOT NULL DEFAULT 0,
         pos_y      REAL    NOT NULL DEFAULT 0,
+        feature    TEXT    NOT NULL DEFAULT '',
         updated_at INTEGER NOT NULL DEFAULT 0
       );
 
@@ -1736,6 +1737,9 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
     this.ensureColumn("npcs", "scale_y", "REAL NOT NULL DEFAULT 1");
     this.ensureColumn("npcs", "pos_x", "REAL NOT NULL DEFAULT 0");
     this.ensureColumn("npcs", "pos_y", "REAL NOT NULL DEFAULT 0");
+    // 入口功能绑定（#1369）：'' = 没绑；'title' 称号 / 'soul' 战魂 / 'rank' 军衔。
+    // 客户端点击该 NPC 直开对应弹窗；一个功能同时只绑一个 NPC（互斥由 updateNpc 维护）
+    this.ensureColumn("npcs", "feature", "TEXT NOT NULL DEFAULT ''");
     // 装备显示与规则字段（#603 第九域）：老库只有名称与数值，补列后由 seedEquipments 的
     // backfillAppearance 一次性回填（只在 icon 还是空串时填 —— 见那个方法的注释）
     this.ensureColumn("equipments", "occupation", "TEXT NOT NULL DEFAULT '4'");

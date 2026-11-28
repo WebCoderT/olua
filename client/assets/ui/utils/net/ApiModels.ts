@@ -6132,6 +6132,10 @@ export type Npc = {
    */
   posY: number;
   /**
+   * 入口功能绑定（#1369：'' = 没绑；title 称号 / soul 战魂 / rank 军衔）
+   */
+  feature: string;
+  /**
    * 最近更新时间（毫秒）
    */
   updatedAt: number;
@@ -6185,6 +6189,10 @@ export type UpdateNpc = {
    * 纵向偏移（像素，±4000，不传则不改；0 = 不偏移）
    */
   posY?: number;
+  /**
+   * 入口功能绑定（不传则不改；空串 = 解绑。设上后同功能在别的 NPC 上的绑定自动清掉）
+   */
+  feature?: "" | "title" | "soul" | "rank";
 };
 
 export type QuestObjective = {

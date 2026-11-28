@@ -7,7 +7,7 @@
  * · 数据链路（#655）：客户端是**空运行时表**，唯一数据来源 = 服务端 `titles` 表（经快照整表下发）；
  *   每阶的属性与升级价都是表里那一行（不再有 rate / priceBase 曲线）
  * · 存档迁移（旧档 title 补 0）与升级链路接线、属性加成在服务端权威重算（#541）、头顶常显、预加载
- * · 入口：称号不走 NPC，唯一入口 = 角色信息弹窗的「称号」按钮；头部信息栏的写死文字称号占位已移除
+ * · 入口：角色信息弹窗的「称号」按钮；#1369 起入口 NPC 可配（npcs.feature），头部信息栏的写死文字称号占位已移除
  *
  * 数据层跑在沙箱里（configs/game-config 的运行时表用**配置快照里的出厂数据**灌——见 lib/configs-sandbox.cjs
  * 的 seedRuntimeTables），素材与源码断言直接读文件。
@@ -163,7 +163,9 @@ check(/function createTitleCard/.test(uiHelperSource) && /function createTitleAt
 // #1120 拆分后：卡片尺寸收进 paintGrowthCard 的 spec（布局常量整体传入，零件不再点取 cardSize）
 check(/titleUpgradeDialogLayout\.list/.test(uiHelperSource) && /titleUpgradeDialogLayout\.attribute/.test(uiHelperSource) && /titleAttributeLabels/.test(uiHelperSource), "称号零件的几何与属性顺序都来自 configs（不写死）");
 check(/new TitleUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.titleButton/.test(roleInfoSource), "角色信息弹窗有「称号」按钮打开称号弹窗（唯一入口）");
-check(/new WarSoulDialog/.test(npcClicksSource) && !/TitleUpgradeDialog/.test(npcClicksSource), "NPC 只挂战魂弹窗，称号不走 NPC");
+// #1369：称号入口 NPC 化 —— 绑定在服务端 npcs.feature（运营在管理端称号页选），工厂登记在 npcFeatureHandlers；
+// 角色信息弹窗的按钮入口保留
+check(/npcFeatureHandlers\["title"\] = \(\) => new TitleUpgradeDialog\(\)\.open\(\)/.test(npcClicksSource), "称号入口 NPC 可配（featureHandlers 登记 title → 称号弹窗）");
 check(/createTitleCard|createTitleAttributeList|createTitleAnimation|upgradeTitle\(\)|RoleUIManager\.updateTitleShow/.test(dialogSource), "称号弹窗接线：零件/升级/头顶刷新");
 check(!/soulShow/.test(dialogSource), "称号弹窗没有「外显」勾选框（称号常显头顶）");
 check(/title_upgrade_dialog/.test(dialogsLayoutSource) && /titleButton: \{ name: "role_title_button"/.test(dialogsLayoutSource), "弹窗布局与入口按钮都在 configs/layout/dialogs");

@@ -1,7 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { NpcRow } from "../../../database/rows";
+
+/** 入口功能绑定取值（#1369）：空串 = 没绑；客户端点击该 NPC 直开对应弹窗 */
+export const NPC_FEATURES = ["", "title", "soul", "rank"] as const;
 
 /**
  * 管理端看到的一条 NPC 数据（#258 / #603 第七域）
@@ -35,6 +38,9 @@ export class NpcDto {
   @ApiProperty({ description: "精灵纵向偏移（像素，0 = 不偏移）" })
   posY: number;
 
+  @ApiProperty({ description: "入口功能绑定（#1369：'' = 没绑；title 称号 / soul 战魂 / rank 军衔）" })
+  feature: string;
+
   @ApiProperty({ description: "最近更新时间（毫秒）" })
   updatedAt: number;
 
@@ -48,6 +54,7 @@ export class NpcDto {
     dto.scaleY = row.scale_y;
     dto.posX = row.pos_x;
     dto.posY = row.pos_y;
+    dto.feature = row.feature;
     dto.updatedAt = row.updated_at;
     return dto;
   }
@@ -128,4 +135,12 @@ export class UpdateNpcDto {
   @Min(-MAX_OFFSET, { message: `纵向偏移不能小于 -${MAX_OFFSET}` })
   @Max(MAX_OFFSET, { message: `纵向偏移不能大于 ${MAX_OFFSET}` })
   posY?: number;
+
+  @ApiPropertyOptional({
+    description: "入口功能绑定（不传则不改；空串 = 解绑。设上后同功能在别的 NPC 上的绑定自动清掉）",
+    enum: NPC_FEATURES,
+  })
+  @IsOptional()
+  @IsIn(NPC_FEATURES as unknown as string[], { message: "入口功能只能是 title / soul / rank 或空串" })
+  feature?: string;
 }

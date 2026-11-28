@@ -1123,9 +1123,13 @@ export class GameConfigService {
       scale_y: dto.scaleY ?? existing.scale_y,
       pos_x: dto.posX ?? existing.pos_x,
       pos_y: dto.posY ?? existing.pos_y,
+      // 入口功能绑定（#1369）：不传则不改；空串 = 解绑
+      feature: dto.feature ?? existing.feature,
       updated_at: Date.now(),
     };
     this.npcsRepo.update(next);
+    // 绑上非空 feature 时把别的 NPC 身上的同 feature 清掉（一个功能同时只挂一个 NPC）
+    if (dto.feature && dto.feature !== "") this.npcsRepo.clearFeatureExcept(dto.feature, id);
     return NpcDto.from(this.requireNpc(id));
   }
 

@@ -280,6 +280,31 @@ function main() {
   check(npcAfter && npcAfter.position.x === 11 && npcAfter.position.y === 0, "偏移取快照", npcAfter && JSON.stringify(npcAfter.position));
   check(npcs.size === 2, "整表重建：快照里没有的 NPC 不会残留", `size=${npcs.size}`);
   check(typeof (npcAfter && npcAfter.onClick) === "function", "点击行为按 id 延迟接线（npcClicks 注册表）", typeof (npcAfter && npcAfter.onClick));
+  check(npcAfter && npcAfter.feature === "", "快照行没带 feature（出厂旧形状）→ 落空串（没绑定）", npcAfter && npcAfter.feature);
+
+  // #1369：入口功能绑定 —— feature 优先路由，npcClicks 兜底
+  const { npcClicks, npcFeatureHandlers } = require(path.join(outDir, "configs/game-config.js"));
+  const clicked = { soul: 0, legacy: 0 };
+  npcFeatureHandlers["soul"] = () => { clicked.soul += 1; };
+  npcClicks["9002"] = () => { clicked.legacy += 1; };
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      npcs: [
+        { id: "9002", label: "战魂使者（绑 feature）", dialog: "", src: "npc/2108", scaleX: 1, scaleY: 1, posX: 0, posY: 0, feature: "soul", updatedAt: 0 },
+      ],
+    }),
+  );
+  npcs.get("9002").onClick();
+  check(clicked.soul === 1 && clicked.legacy === 0, "绑了 feature 的 NPC 点击走 featureHandler、不叠开 npcClicks 的窗", JSON.stringify(clicked));
+  snapshotApi.applyContentSnapshot(
+    contentSnapshot({
+      npcs: [
+        { id: "9002", label: "战魂使者（没绑）", dialog: "", src: "npc/2108", scaleX: 1, scaleY: 1, posX: 0, posY: 0, updatedAt: 0 },
+      ],
+    }),
+  );
+  npcs.get("9002").onClick();
+  check(clicked.soul === 1 && clicked.legacy === 1, "没绑 feature 的 NPC 点击回落 npcClicks 的 id 硬编码（出厂行为不变）", JSON.stringify(clicked));
 
   console.log("\n=== 时装：整表重建（资源路径也取快照）===");
 
