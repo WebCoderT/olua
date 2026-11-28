@@ -10,7 +10,8 @@ export const ROLE_RUN_SPEED = 4;
 
 /**
  * 角色体型与碰撞盒（显示与物理共用）
- * 角色锚点在脚下（0.5, 0），所以碰撞盒向上偏移身高的一半才正好罩住身体
+ * 角色锚点在脚下（0.5, 0），碰撞盒按 #1339 拍板改成**贴地的 40×40**（盒 y∈[0,40]，
+ * 中心 (0,20)）—— 立绘是 40×70 的展示尺寸，挡位判定只算脚下这一块
  * 调体型（例如换成更瘦的职业模型）只改这里
  *
  * ⚠️ **服务端也有一份同样的数**（`CastGuardService` 的 `ROLE_HALF_WIDTH / ROLE_HALF_HEIGHT /
@@ -21,9 +22,9 @@ export const ROLE_RUN_SPEED = 4;
 export const roleBody = {
   /** 角色显示尺寸（宽 × 高，世界单位） */
   size: new Size(40, 70),
-  /** 碰撞盒尺寸与相对脚下原点的偏移 */
-  colliderSize: new Size(40, 70),
-  colliderOffset: new Vec2(0, 35),
+  /** 碰撞盒尺寸与相对脚下原点的偏移（#1339：40×40 贴地，原 40×70 罩全身） */
+  colliderSize: new Size(40, 40),
+  colliderOffset: new Vec2(0, 20),
 };
 
 /**

@@ -30,6 +30,14 @@ const LABEL_CENTER_Y = 75;
 /** 精灵区中心相对容器中心的纵向距离（引擎 y 向上，负 = 在下方）：85 - 20 - 150/2 = -10 */
 const SPRITE_CENTER_Y = -10;
 
+/**
+ * NPC 障碍碰撞盒（#1339，与客户端 `MapObjectSpawner.NPC_COLLIDER_SIZE / NPC_COLLIDER_OFFSET` 同值）：
+ * 100×100、中心在容器中心下方 35px（底边贴容器底边 y=-85）。画进画布供比对。
+ */
+const COLLIDER_W = 100;
+const COLLIDER_H = 100;
+const COLLIDER_CENTER_Y = -35;
+
 /** 数值限界（与服务端 UpdateNpcDto 同口径；UI 先拦、服务端再校验） */
 const SCALE_MIN = 0.1;
 const SCALE_MAX = 10;
@@ -126,6 +134,17 @@ export function NpcAlignWorkbench(props: {
     ctx.stroke();
     ctx.restore();
 
+    // —— NPC 障碍碰撞盒（#1339）：红色实感框（客户端调试显示的障碍配色 rgba(255,64,64)），比对精灵脚下与挡位范围 ——
+    ctx.save();
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = "rgba(255,64,64,0.85)";
+    ctx.fillStyle = "rgba(255,64,64,0.08)";
+    const colliderX = cx - (COLLIDER_W * z) / 2;
+    const colliderY = cy - COLLIDER_CENTER_Y * z - (COLLIDER_H * z) / 2;
+    ctx.fillRect(colliderX, colliderY, COLLIDER_W * z, COLLIDER_H * z);
+    ctx.strokeRect(colliderX, colliderY, COLLIDER_W * z, COLLIDER_H * z);
+    ctx.restore();
+
     // —— 精灵：原始纹理尺寸 × scale，中心 = 精灵区中心 + (posX, posY)（引擎 y 向上 → 画布翻转） ——
     const frame = frameRef.current;
     if (!frame) return;
@@ -214,8 +233,9 @@ export function NpcAlignWorkbench(props: {
         </Field>
       </div>
       <p className="text-xs text-ink-5">
-        蓝虚线 = 客户端节点容器（100×170）；灰虚线 = 名字条 / 精灵区；橙色十字 = 地图点位（碰撞与交互的圆心）。
-        在画布上拖拽 = 调横向 / 纵向偏移；缩放改数字。画布上看到的相对关系 = 游戏里摆出来的。
+        蓝虚线 = 客户端节点容器（100×170）；灰虚线 = 名字条 / 精灵区；橙色十字 = 地图点位（碰撞与交互的圆心）；
+        红框 = NPC 障碍碰撞盒（100×100 贴容器底，玩家站不进这块）。在画布上拖拽 = 调横向 / 纵向偏移；缩放改数字。
+        对齐时让精灵的「脚」落进红框即可。画布上看到的相对关系 = 游戏里摆出来的。
       </p>
     </div>
   );

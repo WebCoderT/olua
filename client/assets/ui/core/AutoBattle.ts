@@ -547,10 +547,12 @@ export default class AutoBattle {
       polys.push(poly.points.map(([x, y]) => ({ x, y })));
     });
     layout?.npcs.forEach((point) => {
-      // 点位已经是世界坐标（#672），矩形按「以点为中心」摊开
+      // 点位已经是世界坐标（#672）；#1339 起占位盒与 NPC 障碍碰撞盒同形状同位置：
+      // 尺寸/偏移见 configs/autoBattle 的 npcObstacleSize / npcObstacleOffsetY（中心 = 点位下方 35px）
       const width = autoBattle.npcObstacleSize.width;
       const height = autoBattle.npcObstacleSize.height;
-      rects.push(new Rect(point.x - width / 2, point.y - height / 2, width, height));
+      const centerY = point.y + autoBattle.npcObstacleOffsetY;
+      rects.push(new Rect(point.x - width / 2, centerY - height / 2, width, height));
     });
     return { rects, polys };
   }

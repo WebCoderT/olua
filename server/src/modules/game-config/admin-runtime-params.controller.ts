@@ -148,7 +148,7 @@ export class AdminRuntimeParamsController {
       "出手判定链第三道闸的参数（`runtime_params.cast_range` 列，#1030）。与位移校验一样**单独一条接口**、不下发客户端：\n\n" +
       "- `mode`：`off` 不判（回滚用）/ `log` 只记账放行（**出厂**）/ `enforce` 超距即拒该次出手（`rejected: \"range\"`）；\n" +
       "- `jitterPx`：抖动余量（出厂 24），抵掉 10Hz 上报的相位差与怪物插值滞后。\n\n" +
-      "判定式与客户端 `canAttackTarget` **同一式**：把两边的碰撞盒（角色 40×70，怪物取 `monster_presentation.content_width/height`）\n" +
+      "判定式与客户端 `canAttackTarget` **同一式**：把两边的碰撞盒（角色 40×40 贴地，怪物取 `monster_presentation.content_width/height`）\n" +
       "换成边缘间距再比 `skills.distance`。`distance ≤ 0` 的技能（不限距离）、范围技能、自身增益技能不走这道闸。\n\n" +
       "`log` 档跑满一周、超距占比与误伤抽样都为 0 之后再切 `enforce`。",
     permissions: [Permission.GAME_CONFIG_READ],

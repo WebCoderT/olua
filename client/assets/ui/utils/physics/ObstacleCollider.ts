@@ -1,15 +1,20 @@
-import { BoxCollider2D, ERigidBody2DType, Node, PolygonCollider2D, RigidBody2D, UITransform, Vec2 } from "cc";
+import { BoxCollider2D, ERigidBody2DType, Node, PolygonCollider2D, RigidBody2D, UITransform, Vec2, Size } from "cc";
 
 /**
  * 静态障碍物碰撞体
- * 把节点做成不可穿越的障碍：静态刚体 + 与节点尺寸一致的盒碰撞体
+ * 把节点做成不可穿越的障碍：静态刚体 + 盒碰撞体
  * NPC 与 Tiled 碰撞区域共用这一套做法
+ *
+ * 尺寸 / 偏移缺省 = 与节点 contentSize 一致、零偏移（Tiled 碰撞区等老调用点行为不变）；
+ * NPC（#1339）传显式值：碰撞盒 100×100 底边贴容器底边，不再罩整个 100×170 容器 ——
+ * 立绘上半身不算挡位，玩家可以站到 NPC 脸前。
  */
-export function addObstacleCollider(node: Node) {
+export function addObstacleCollider(node: Node, size?: Size, offset?: Vec2) {
   const rigidBody = node.addComponent(RigidBody2D);
   rigidBody.type = ERigidBody2DType.Static;
   const collider = node.addComponent(BoxCollider2D);
-  collider.size = node.getComponent(UITransform).contentSize;
+  collider.size = size ?? node.getComponent(UITransform).contentSize;
+  collider.offset = offset ?? new Vec2();
 }
 
 /**
