@@ -31,12 +31,12 @@ const LABEL_CENTER_Y = 75;
 const SPRITE_CENTER_Y = -10;
 
 /**
- * NPC 障碍碰撞盒（#1339，与客户端 `MapObjectSpawner.NPC_COLLIDER_SIZE / NPC_COLLIDER_OFFSET` 同值）：
- * 100×100、中心在容器中心下方 35px（底边贴容器底边 y=-85）。画进画布供比对。
+ * NPC 障碍碰撞盒（#1339 起步 100×100、#1342 高度收到 60，与客户端 `MapObjectSpawner.NPC_COLLIDER_SIZE / NPC_COLLIDER_OFFSET` 同值）：
+ * 100×60、中心在容器中心下方 55px（底边贴容器底边 y=-85）。画进画布供比对。
  */
 const COLLIDER_W = 100;
-const COLLIDER_H = 100;
-const COLLIDER_CENTER_Y = -35;
+const COLLIDER_H = 60;
+const COLLIDER_CENTER_Y = -55;
 
 /** 数值限界（与服务端 UpdateNpcDto 同口径；UI 先拦、服务端再校验） */
 const SCALE_MIN = 0.1;
@@ -234,7 +234,7 @@ export function NpcAlignWorkbench(props: {
       </div>
       <p className="text-xs text-ink-5">
         蓝虚线 = 客户端节点容器（100×170）；灰虚线 = 名字条 / 精灵区；橙色十字 = 地图点位（碰撞与交互的圆心）；
-        红框 = NPC 障碍碰撞盒（100×100 贴容器底，玩家站不进这块）。在画布上拖拽 = 调横向 / 纵向偏移；缩放改数字。
+        红框 = NPC 障碍碰撞盒（100×60 贴容器底，玩家站不进这块）。在画布上拖拽 = 调横向 / 纵向偏移；缩放改数字。
         对齐时让精灵的「脚」落进红框即可。画布上看到的相对关系 = 游戏里摆出来的。
       </p>
     </div>

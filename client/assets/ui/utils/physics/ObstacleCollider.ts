@@ -6,7 +6,7 @@ import { BoxCollider2D, ERigidBody2DType, Node, PolygonCollider2D, RigidBody2D, 
  * NPC 与 Tiled 碰撞区域共用这一套做法
  *
  * 尺寸 / 偏移缺省 = 与节点 contentSize 一致、零偏移（Tiled 碰撞区等老调用点行为不变）；
- * NPC（#1339）传显式值：碰撞盒 100×100 底边贴容器底边，不再罩整个 100×170 容器 ——
+ * NPC（#1339）传显式值：碰撞盒底边贴容器底边，不再罩整个 100×170 容器 ——
  * 立绘上半身不算挡位，玩家可以站到 NPC 脸前。
  */
 export function addObstacleCollider(node: Node, size?: Size, offset?: Vec2) {
