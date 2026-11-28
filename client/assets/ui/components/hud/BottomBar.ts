@@ -123,7 +123,7 @@ export default class BottomBar extends Node {
     // 自动挂机开关（图标随挂机状态切换，状态由 AutoBattle 回调同步）
     this.autoFightButton = new AutoFightButton();
     anchor(paths.autoFight).addChild(this.autoFightButton);
-    // 成长线入口（#1381）：称号 → 称号升级弹窗 / 元神 → 战魂弹窗（总览弹窗落地后换过去）
+    // 成长线入口（#1387）：entries 配置传名称+图标，两份实例来自同一个通用按钮 prefab；称号 → 称号升级弹窗 / 元神 → 战魂弹窗（总览弹窗落地后换过去）
     const growthAnchor = anchor(paths.growthEntries);
     if (growthAnchor) {
       this.growthEntries = new GrowthEntries(growthPrefab, {
