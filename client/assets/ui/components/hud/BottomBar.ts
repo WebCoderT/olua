@@ -1,9 +1,9 @@
-import { instantiate, Node, Prefab, Size, UITransform } from "cc";
+import { instantiate, Node, Prefab, UITransform } from "cc";
 import { Role } from "../../../entities/Role";
 import { SkillId } from "../../../types/skill";
 import { ShortcutKeys } from "../../../types/role";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
-import { bottomBarLayout, bottomBarPrefab } from "../../../configs/hudLayout";
+import { bottomBarPrefab } from "../../../configs/hudLayout";
 import { bottomNavItems } from "../../../configs/bottomNav";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleInfoDialog from "../dialogs/RoleInfoDialog";
@@ -27,7 +27,7 @@ import AutoFightButton from "./AutoFightButton";
  * 「设置」入口的 key（configs/bottomNav.bottomNavItems 里的最后一条）
  *
  * 稿把它单独摆在第二条竖分隔线之后（不在六颗主按钮那一排），所以组装时要把它从
- * BottomNavBar 的列表里摘出来、按 bottomBarLayout.settingsButton 自己摆位。
+ * BottomNavBar 的列表里摘出来、挂在 prefab 的 SettingsButton 锚点上（#1361）。
  */
 const SETTINGS_KEY = "settings";
 
@@ -94,14 +94,7 @@ export default class BottomBar extends Node {
       return found as Node;
     };
     // 子组件（添加顺序即绘制层级；各组件自身不再定位，摆位由 prefab 锚点承载）
-    // 底衬（稿 `.bottom::before` 的底部暗角）：格与格之间的缝会露出亮色地块，垫在最底下 —— 渐变仍是代码画
-    anchor(paths.backdrop).addChild(GameUiHelper.createHudBackdrop("bottom_backdrop", bottomBarLayout.backdrop));
-    // 组间竖分隔线（稿 .vsep）：压在底衬之上、按钮之下，纯装饰不参与命中 —— 渐隐竖线仍是代码画
-    bottomBarPrefab.nodes.vseps.forEach((path, i) => {
-      const spec = bottomBarLayout.separators;
-      const rule = GameUiHelper.createVerticalRule(`bottom_vsep_${i}`, new Size(spec.width, spec.height), spec.color);
-      anchor(path).addChild(rule);
-    });
+    // 底衬与竖分隔线的视觉在 prefab（#1363：HudBackdrop / VerticalRule 组件，编辑器可见可调）
     this.navBar = new BottomNavBar(this.bottomNavBarButtons.filter((button) => button.key !== SETTINGS_KEY), role);
     anchor(paths.navBar).addChild(this.navBar);
     // 「设置」独立一颗（稿放在第二条竖分隔线之后；逻辑与其它入口一致，未做时给「开发中」提示）

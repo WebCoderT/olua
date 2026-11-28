@@ -60,13 +60,12 @@ export const smallMapPrefab = {
 };
 
 /**
- * 底部栏 prefab 的运行时契约（#1361）：底衬锚点 + 两条渐隐竖线锚点 + 七个子组件挂点。
- * 子组件（血球/经验条/快捷键栏/挂机钮…）自身不再定位，摆位全部由这里的锚点承载。
+ * 底部栏 prefab 的运行时契约（#1361）：七个子组件挂点。
+ * 底衬（HudBackdrop）与两条竖分隔线（VerticalRule）的视觉在 prefab（#1363），
+ * 子组件（血球/经验条/快捷键栏/挂机钮…）自身不再定位，摆位全部由锚点承载。
  */
 export const bottomBarPrefab = {
   nodes: {
-    backdrop: "BackdropAnchor",
-    vseps: ["Vsep0", "Vsep1"],
     navBar: "NavBar",
     settingsButton: "SettingsButton",
     expBar: "ExpBar",
@@ -190,15 +189,6 @@ export const bottomBarLayout = {
    * 亮色地块（水面 / 浅石板）从缝里钻出来时，底栏就像几块板子漂在亮底上。
    * 这层把世界压下去，三块 HUD 下面都有同一层暗底。
    */
-  backdrop: {
-    /** 稿 `.bottom::before{inset:auto -46px -10px;height:126px}`：底栏宽 896 + 左右各 46 = 988 */
-    size: new Size(988, 126),
-    /** 椭圆摆位在 prefab 的 BackdropAnchor 锚点上（#1361） */
-    /** 同心椭圆层数（同色叠加出渐变；越多越平滑，DrawCall 不变） */
-    steps: 24,
-    /** 稿中心浓度 rgba(10,7,4,.82)（token 的 veil 是 .72，底衬按稿给足） */
-    color: new Color(10, 7, 4, 209),
-  },
   /**
    * 功能按键区（横向布局容器，按钮排列交给 Layout）
    *
@@ -314,16 +304,6 @@ export const bottomBarLayout = {
     gradientStop: 0.7,
   },
   /** 「设置」独立按钮摆位在 prefab 的 SettingsButton 锚点上（#1361，尺寸 = navButton.size 44×44） */
-  /**
-   * 组间竖分隔线（稿 `.vsep`：1px 宽、44 高、上下透明、中间 line-3）
-   * 两条：战斗列与功能键组之间、功能键组与设置之间
-   */
-  separators: {
-    /** 两条竖线的摆位在 prefab 的 Vsep0 / Vsep1 锚点上（#1361） */
-    width: 1,
-    height: 44,
-    color: T.line[3],
-  },
 };
 
 //#endregion

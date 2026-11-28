@@ -87,62 +87,6 @@ export function createGlassPlate(name: string, size: Size, radius: number, borde
   }
 
   /**
-   * HUD 底衬（稿 `.bottom::before` 的底部暗角）
-   *
-   * 稿是 `radial-gradient(58% 100% at 50% 100%, rgba(10,7,4,.82), transparent 74%)`：
-   * **椭圆**径向渐变，圆心在底栏正中、底边最暗，向上与左右同时淡出。
-   *
-   * Graphics 没有渐变填充 → 用「同心半透明椭圆逐层叠」近似：每层 alpha 很小，
-   * 越靠中心叠得越多，中心自然累积到目标浓度（比竖条渐变多一个左右方向的收边，
-   * 底栏两侧不再是一条硬边）。
-   */
-export function createHudBackdrop(name: string, spec: { size: Size; steps: number; color: Color }) {
-    const node = UiHelper.createNode(name, new Vec2(), spec.size);
-    const graphics = node.addComponent(Graphics);
-    const { width, height } = spec.size;
-    const steps = Math.max(1, spec.steps);
-    // 每层 alpha：n 层叠加后中心 ≈ 目标浓度（target = spec.color.a / 255）
-    const target = Math.min(0.98, spec.color.a / 255);
-    const layerAlpha = Math.round(255 * (1 - Math.pow(1 - target, 1 / steps)));
-    for (let i = steps; i >= 1; i--) {
-      const k = i / steps;
-      const color = spec.color.clone();
-      color.a = layerAlpha;
-      graphics.fillColor = color;
-      // 椭圆中心压在本节点底边（= 屏幕底）：横向半径取稿的 58% 宽、纵向半径 = 全高
-      // （稿 `radial-gradient(58% 100% at 50% 100%)` 的两个百分比就是横/纵半径，不是直径）
-      graphics.ellipse(0, -height / 2, width * 0.58 * k, height * k);
-      graphics.fill();
-    }
-    return node;
-  }
-
-  /**
-   * 竖分隔线（稿 `.vsep`：1px 宽、上下透明、中间 line-3）
-   *
-   * 稿是 `linear-gradient(180deg, transparent, line-3 18% 82%, transparent)`：
-   * 按高度切竖条，两端 alpha 收到 0，中段满色。
-   */
-export function createVerticalRule(name: string, size: Size, color: Color) {
-    const node = UiHelper.createNode(name, new Vec2(), size);
-    const graphics = node.addComponent(Graphics);
-    const steps = 9;
-    const stepHeight = size.height / steps;
-    for (let i = 0; i < steps; i++) {
-      const t = (i + 0.5) / steps;
-      // 两端 18% / 82% 之外全透明，中间满色（线性过渡）
-      const fade = Math.min(1, Math.min(t, 1 - t) / 0.32);
-      const tint = color.clone();
-      tint.a = Math.round(color.a * fade);
-      if (tint.a <= 0) continue;
-      graphics.fillColor = tint;
-      graphics.rect(-size.width / 2, -size.height / 2 + i * stepHeight, size.width, stepHeight + 0.5);
-      graphics.fill();
-    }
-    return node;
-  }
-
-  /**
    * 重绘玻璃底板（Graphics 是立即模式：状态切换要换边框颜色时不能只改 strokeColor，必须清掉重画）
    * @param plate createGlassPlate 返回的底板节点
    */
