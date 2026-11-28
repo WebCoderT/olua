@@ -1,4 +1,4 @@
-import { Color, instantiate, Label, Node, Prefab, Sprite, UITransform } from "cc";
+import { instantiate, Label, Node, Prefab, Sprite, UITransform } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import UiHelper from "../../helpers/UiHelper";
 import RoleUIManager from "../../core/RoleUIManager";
@@ -26,10 +26,9 @@ const REALTIME_STATUS_TEXTS: Record<RealtimeStatus, string> = {
  * 可在 Cocos 编辑器里直接可视化改版式 —— 改版式请改 prefab，别回代码拼节点。
  *
  * 本组件 `extends Node` 的对外契约不变（RoleUIManager 注册 / LayerManager.addToUILayer / dispose），
- * 只把"构造函数拼节点"换成"实例化 prefab + 按节点名绑定动态零件"，并保留三件事：
- * 1. 动态填值（名字 / 等级 / 货币 / 战斗力）
- * 2. 动态换图（职业性别头像）
- * 3. 动态色（实时通道四态 + 战斗力 ±飘字）—— 数据驱动，无法固化进 prefab
+ * 只把"构造函数拼节点"换成"实例化 prefab + 按节点名绑定动态零件"，并保留两件事：
+ * 1. 动态填值（名字 / 等级 / 货币 / 战斗力、实时通道状态文案）—— 只写 string，不碰任何样式（#1359）
+ * 2. 动态换图（职业性别头像，数据内容而非样式）
  *
  * 节点名集中在 `roleInfoBarPrefab.nodes`，重命名节点要同步那里；缺节点只警告不让整块 UI 崩。
  */
@@ -46,11 +45,7 @@ export default class RoleInfoBar extends Node {
   private combatNode: Node;
   /** 头像图（按职业/性别换 spriteFrame） */
   private avatar: Sprite;
-  /** 战斗力分隔线节点（placeLevel 的宽度上限从它实际位置读） */
-  private combatDivider: Node;
-  /** 实时通道状态点（四态换色） */
-  private realtimeDot: Sprite | null = null;
-  /** 实时通道状态文字（四态换文案 + 换色） */
+  /** 实时通道状态文字（四态换文案；#1359 口径不改色，颜色固定为 prefab 设计） */
   private realtimeLabel: Label | null = null;
   /** 实时通道状态订阅的退订函数（dispose 时先退订，#1188 口径） */
   private offRealtimeStatus: (() => void) | null = null;
@@ -73,7 +68,7 @@ export default class RoleInfoBar extends Node {
     this.addComponent(UITransform).setContentSize(instance.getComponent(UITransform)!.contentSize);
     const children = instance.children.slice();
     for (const child of children) child.setParent(this);
-    this.applyFixedPosition();
+    this.applyFixedPosition(instance.position);
 
     const nodes = roleInfoBarPrefab.nodes;
     // 取用器找不到节点/组件只告警不崩（#1357）：报出具体路径，层级错位一眼定位，
@@ -100,19 +95,16 @@ export default class RoleInfoBar extends Node {
     this.combatLabel = label(nodes.combatValue)!;
     this.combatNode = node(nodes.combatValue)!;
     this.avatar = sprite(nodes.avatar)!;
-    this.combatDivider = node(nodes.combatDivider)!;
 
-    // 动态填值（颜色字号在 prefab，代码不覆写）
+    // 动态填值（颜色字号、位置全部在 prefab，代码不覆写——#1359：Level 摆位听 prefab 的）
     this.nameLabel.string = role.name;
     this.levelLabel.string = `${role.level} 级`;
-    this.placeLevel();
     this.bindGoldCountLabel.string = role.bindGold.toString();
     this.combatLabel.string = role.combat.toString();
     this.applyAvatar(role);
 
-    // 实时通道状态指示（#1324：仅本人信息栏带；四态色由代码按状态覆盖 prefab 占位色）
+    // 实时通道状态指示（#1324：仅本人信息栏带；#1359 口径——代码只切文案，点色/字色固定为 prefab 设计）
     if (this.isSelf) {
-      this.realtimeDot = sprite(nodes.statusDot);
       this.realtimeLabel = label(nodes.statusText);
       // 注册即以当前状态回调一次，之后每次状态变化跟着变；退订函数留到 dispose
       this.offRealtimeStatus = RealtimeClient.addStatusListener((change) => this.paintRealtimeStatus(change.status));
@@ -124,44 +116,25 @@ export default class RoleInfoBar extends Node {
     RoleUIManager.registerStatusIconBar(statusIconBar);
   }
 
-  /** 定位（固定值，见 hudLayout.roleInfoBarLayout.position —— 主界面布局不再按屏幕尺寸换算） */
-  applyFixedPosition() {
-    const layout = roleInfoBarLayout;
+  /**
+   * 根节点定位（#1359 口径：prefab 为准）：
+   * 本人 = prefab 里设计的根位置原样生效；其他玩家固定屏幕中心（功能定位，避免叠在本人信息栏上）。
+   */
+  applyFixedPosition(prefabPos: { x: number; y: number }) {
     if (!this.isSelf) {
-      this.setPosition(layout.otherPosition.x, layout.otherPosition.y, 0);
+      this.setPosition(roleInfoBarLayout.otherPosition.x, roleInfoBarLayout.otherPosition.y, 0);
       return;
     }
-    this.setPosition(layout.position.x, layout.position.y, 0);
+    this.setPosition(prefabPos.x, prefabPos.y, 0);
   }
 
-  /** 数据变更后刷新显示（只填值，颜色字号不动） */
+  /** 数据变更后刷新显示（只填值，颜色字号、位置都不动） */
   updateRole(role: Role) {
     this.nameLabel.string = role.name;
     this.levelLabel.string = `${role.level} 级`;
-    this.placeLevel();
     this.bindGoldCountLabel.string = role.bindGold.toString();
     this.updateCombat(role.combat);
     this.applyAvatar(role);
-  }
-
-  /**
-   * 「N 级」紧跟在名称右缘（稿 `.info .nm`）
-   *
-   * #1353：字号已固化进 prefab，这里从 nameLabel 节点**实际字号**读，不再取配置常量 ——
-   * 用户在编辑器里改了字号 / 位置，等级定位自动跟着变，不会算错。
-   */
-  private placeLevel() {
-    const fontSize = this.nameLabel.fontSize;
-    const namePos = this.nameLabel.node.position;
-    const nameWidth = this.nameLabel.node.getComponent(UITransform)!.contentSize.width;
-    const leftEdge = namePos.x - nameWidth / 2;
-    let width = 0;
-    for (const ch of this.nameLabel.string) width += ch.charCodeAt(0) > 0x2e80 ? fontSize : fontSize * 0.56;
-    const levelUt = this.levelLabel.node.getComponent(UITransform)!;
-    const dividerX = this.combatDivider.position.x;
-    const maxX = dividerX - levelUt.contentSize.width / 2 - 4;
-    const x = Math.min(leftEdge + width + 8 + levelUt.contentSize.width / 2, maxX);
-    this.levelLabel.node.setPosition(x, this.levelLabel.node.position.y, 0);
   }
 
   /** 职业/性别头像：spriteFrame 从 resources 动态加载（素材随包走，不固化进 prefab） */
@@ -186,17 +159,14 @@ export default class RoleInfoBar extends Node {
   }
 
   /**
-   * 实时通道状态点的着色与文案（#1324）
+   * 实时通道状态的文案（#1324）
    *
-   * #1353：四态色是数据驱动的动态色，无法固化进 prefab —— prefab 里放占位色，这里按状态覆盖。
-   * 点与文字永远同色：已连接 jade / 连接中 gold-4 / 已断开 ember-3 / 未连接 text-3（灰）。
+   * #1359 口径：代码对信息栏只写文字内容，不碰任何样式 —— 通道状态只切文案，
+   * 状态点/文字颜色固定为 prefab 里设计的颜色，运行时不覆盖。
    */
   private paintRealtimeStatus(status: RealtimeStatus) {
-    if (!this.realtimeDot || !this.realtimeLabel) return;
-    const color: Color = roleInfoBarPrefab.realtimeColors[status];
-    this.realtimeDot.color = color;
+    if (!this.realtimeLabel) return;
     this.realtimeLabel.string = getText(REALTIME_STATUS_TEXTS[status]);
-    this.realtimeLabel.color = color;
   }
 
   /** 离场清理：先退订静态监听再拆字段（#1188：销毁期 emit 回调摸已销毁字段是崩溃源），由 ui/Game 的场景收尾调用 */
