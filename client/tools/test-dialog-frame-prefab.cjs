@@ -68,6 +68,30 @@ try {
     return { objs, meta };
   };
 
+  // #1391：prefab 接线契约 —— 节点必有 PrefabInfo（_prefab）、组件必有 CompPrefabInfo（__prefab），
+  // 且每个 Info 恰好被一个宿主引用。漏接线编辑器里打开看不出问题，一运行 instantiate 就崩 isChildOf；
+  // 节点误带 __prefab / 一物二主（node 与组件共享 CompPrefabInfo）会让克隆错乱、组件 node 字段挂上非 Node 对象，同样崩。
+  const checkWiring = (name, objs) => {
+    const indegree = {};
+    for (const [idx, o] of objs.entries()) {
+      if (o.__type__ === "cc.Node") {
+        check(`${name} 节点 ${o._name || idx} 无 __prefab`, !("__prefab" in o), "cc.Node 不该有 __prefab（那是组件专属，出现即引用错乱）");
+        const info = o._prefab && objs[o._prefab.__id__];
+        check(`${name} 节点 ${o._name || idx} 有 PrefabInfo`, !!info && info.__type__ === "cc.PrefabInfo" && !!info.fileId && info.root && info.asset, "节点缺 _prefab 接线（编辑器实例化会崩）");
+        if (o._prefab) indegree[o._prefab.__id__] = (indegree[o._prefab.__id__] || 0) + 1;
+      } else if (o.__type__ !== "cc.Prefab" && o.__type__ !== "cc.PrefabInfo" && o.__type__ !== "cc.CompPrefabInfo" && "node" in o) {
+        const info = o.__prefab && objs[o.__prefab.__id__];
+        check(`${name} 组件 ${o.__type__} 有 CompPrefabInfo`, !!info && info.__type__ === "cc.CompPrefabInfo" && !!info.fileId, "组件缺 __prefab 接线（编辑器实例化会崩）");
+        if (o.__prefab) indegree[o.__prefab.__id__] = (indegree[o.__prefab.__id__] || 0) + 1;
+      }
+    }
+    for (const [idx, o] of objs.entries()) {
+      if (o.__type__ === "cc.PrefabInfo" || o.__type__ === "cc.CompPrefabInfo") {
+        check(`${name} ${o.__type__}[${idx}] 唯一宿主`, indegree[idx] === 1, `被 ${indegree[idx] || 0} 个宿主引用（必须恰好 1 个）`);
+      }
+    }
+  };
+
   //#region A. prefab 结构
 
   console.log("\n— A. prefab 结构 —");
@@ -102,15 +126,8 @@ try {
     check("DialogFrame 组件五件引用已绑定", ["headDrag", "eyebrowLabel", "closeButtonNode", "titleLabel", "titleRule"].every((k) => comp[k] && typeof comp[k].__id__ === "number"), "组件引用字段缺失（prefab 里没绑上）");
     check("DialogFrame 组件无空引用", !JSON.stringify(comp).includes('"__id__": null'));
     // #1391：节点必须有 PrefabInfo、组件必须有 CompPrefabInfo（漏接线 = 编辑器一运行 instantiate 就崩 isChildOf）
-    for (const [pi, o] of objs.entries()) {
-      if (o.__type__ === "cc.Node") {
-        const info = o._prefab && objs[o._prefab.__id__];
-        check(`DialogFrame 节点 ${o._name || pi} 有 PrefabInfo`, !!info && info.__type__ === "cc.PrefabInfo" && !!info.fileId && info.root && info.asset, "节点缺 _prefab 接线（编辑器实例化会崩）");
-      } else if (o.__type__ !== "cc.Prefab" && o.__type__ !== "cc.PrefabInfo" && o.__type__ !== "cc.CompPrefabInfo" && "node" in o) {
-        const info = o.__prefab && objs[o.__prefab.__id__];
-        check(`DialogFrame 组件 ${o.__type__} 有 CompPrefabInfo`, !!info && info.__type__ === "cc.CompPrefabInfo" && !!info.fileId, "组件缺 __prefab 接线（编辑器实例化会崩）");
-      }
-    }
+    // 且每个 PrefabInfo/CompPrefabInfo 恰好被一个宿主引用（一物二主 = 克隆错乱，node/组件共享 CompPrefabInfo 同样崩）
+    checkWiring("DialogFrame", objs, dialogFrameContract);
   }
 
   {
@@ -137,16 +154,8 @@ try {
     check("DialogFoot 分隔线 = FillRect", types.includes(TYPES.fillRect));
     const comp = objs.find((o) => o.__type__ === TYPES.dialogFoot);
     check("DialogFoot 组件三件引用已绑定", ["rule", "leftLabel", "rightLabel"].every((k) => comp[k] && typeof comp[k].__id__ === "number"));
-    // #1391：同 DialogFrame，PrefabInfo / CompPrefabInfo 接线必须齐全
-    for (const [pi, o] of objs.entries()) {
-      if (o.__type__ === "cc.Node") {
-        const info = o._prefab && objs[o._prefab.__id__];
-        check(`DialogFoot 节点 ${o._name || pi} 有 PrefabInfo`, !!info && info.__type__ === "cc.PrefabInfo" && !!info.fileId && info.root && info.asset, "节点缺 _prefab 接线（编辑器实例化会崩）");
-      } else if (o.__type__ !== "cc.Prefab" && o.__type__ !== "cc.PrefabInfo" && o.__type__ !== "cc.CompPrefabInfo" && "node" in o) {
-        const info = o.__prefab && objs[o.__prefab.__id__];
-        check(`DialogFoot 组件 ${o.__type__} 有 CompPrefabInfo`, !!info && info.__type__ === "cc.CompPrefabInfo" && !!info.fileId, "组件缺 __prefab 接线（编辑器实例化会崩）");
-      }
-    }
+    // #1391：同 DialogFrame，PrefabInfo / CompPrefabInfo 接线必须齐全且唯一
+    checkWiring("DialogFoot", objs, dialogFootContract);
   }
 
   //#endregion
