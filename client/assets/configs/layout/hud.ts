@@ -78,12 +78,21 @@ export const bottomBarPrefab = {
   },
 };
 
-/** 成长线入口 prefab 的运行时契约（#1381）：两颗胶囊按钮，静态外观在 prefab，点击由代码接 */
-export const growthEntriesPrefab = {
-  nodes: {
-    title: "TitleEntry",
-    soul: "SoulEntry",
-  },
+/**
+ * 成长线入口**单按钮** prefab 的运行时契约（#1387）：
+ * 样式只有一份在 `ui/prefabs/hud/GrowthEntryButton.prefab`，调用处传名称（label）+ 图标（kind）；
+ * 新增第三个入口 = entries 加一行 + BottomBar 接回调，prefab 不用动。
+ */
+export const growthEntryButton = {
+  /** prefab 内文字节点路径 */
+  labelNode: "Label",
+  /** 相邻按钮间距（px） */
+  gap: 6,
+  /** 入口清单：key = BottomBar 接回调的稳定名，label = 按钮文字，kind = 图标形状（title 奖牌 / soul 灵焰） */
+  entries: [
+    { key: "title", label: "称号", kind: "title" },
+    { key: "soul", label: "元神", kind: "soul" },
+  ],
 };
 
 /** 聊天窗 prefab 的运行时契约（#1361）：窗体底板与分隔线在 prefab，页签挂 TabsAnchor */
