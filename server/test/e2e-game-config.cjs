@@ -594,6 +594,7 @@ async function main() {
     checkEqual(runtimeRes.body?.data?.autoBattle?.moveByRun, runtime.autoBattle.moveByRun, "自动战斗布尔开关初值 = 出厂 seed");
     checkEqual(runtimeRes.body?.data?.autoBattle?.classicWalkMode, runtime.autoBattle.classicWalkMode, "经典走路模式开关初值 = 出厂 seed（#1334）");
     checkEqual(runtimeRes.body?.data?.autoBattle?.classicStepLength, runtime.autoBattle.classicStepLength, "经典模式步长初值 = 出厂 seed（#1340）");
+    checkEqual(runtimeRes.body?.data?.drop?.fullScreenPickup, runtime.drop.fullScreenPickup, "全屏自动拾取开关初值 = 出厂 seed（#1380）");
     checkEqual(runtimeRes.body?.data?.guild?.nameMax, runtime.guild.nameMax, "帮会名上限初值 = 出厂 seed");
     checkEqual(runtimeRes.body?.data?.updatedAt, runtimeRow.updatedAt, "updatedAt = 快照那一列（库里被人改过就不是 0）");
 
@@ -609,6 +610,17 @@ async function main() {
     checkEqual(autoPatched.body?.data?.autoBattle?.classicWalkMode, true, "经典走路模式开关按提交值生效（#1334）");
     checkEqual(autoPatched.body?.data?.autoBattle?.classicStepLength, 150, "经典模式步长按提交值生效（#1340）");
     checkEqual(autoPatched.body?.data?.autoBattle?.cellSize, 24, "网格边长按提交值生效");
+
+    // 全屏自动拾取（#1380）：开关可改、非布尔拒绝
+    const fullScreenPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { fullScreenPickup: true } } });
+    checkEqual(fullScreenPatched.status, 200, "改全屏自动拾取开关成功（#1380）");
+    checkEqual(fullScreenPatched.body?.data?.drop?.fullScreenPickup, true, "全屏自动拾取按提交值生效（#1380）");
+    await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { fullScreenPickup: false } } });
+    // 管道开了 enableImplicitConversion（#1172）：数字 1 隐式转成 true 生效（与 autoBattle 布尔键同口径），不是 400
+    const fullScreenAsNumber = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { fullScreenPickup: 1 } } });
+    checkEqual(fullScreenAsNumber.status, 200, "全屏自动拾取传数字 1 → 隐式转换生效（既有管道口径）");
+    checkEqual(fullScreenAsNumber.body?.data?.drop?.fullScreenPickup, true, "数字 1 按隐式转换落成 true");
+    await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { fullScreenPickup: false } } });
 
     const runtimeNegative = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: -1 } } });
     checkEqual(runtimeNegative.status, 400, "负半径 → 400（DTO 取值域）");

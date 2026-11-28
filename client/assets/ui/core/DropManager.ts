@@ -1,5 +1,5 @@
 import { isValid, Node, UITransform, Vec2, Vec3 } from "cc";
-import { dropRuntime } from "../../configs/drop";
+import { dropRuntime, FULL_SCREEN_PICKUP_RADIUS } from "../../configs/drop";
 import { getGoodCursorStyle, cursorConfig } from "../../configs/cursor";
 import { getItem } from "../../configs/items";
 import { dropItemLayout } from "../../configs/layout/hud";
@@ -109,6 +109,9 @@ export default class DropManager {
    * 出厂值，后台改了「没生效」且没有任何报错。同类的坑还有 `const X = cfg.y` 的模块级快照。
    */
   private static get autoPickupRadius(): number {
+    // 全屏自动拾取（#1380）：开关开启时半径放宽到全屏（服务端距离闸同步放宽，
+    // FULL_SCREEN_PICK_RANGE 同值——两端口径一致，否则客户端捡了服务端拒）
+    if (dropRuntime.fullScreenPickup) return Math.max(dropRuntime.autoPickupRadius, FULL_SCREEN_PICKUP_RADIUS);
     return dropRuntime.autoPickupRadius;
   }
   private static get fullTipInterval(): number {

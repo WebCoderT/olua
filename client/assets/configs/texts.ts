@@ -660,6 +660,8 @@ export const uiTexts = {
   net_unknown_tip: "网络异常，请稍后重试",
   /** 实时通道断了（会自动重连；重连成功另有一条提示） */
   realtime_disconnected_tip: "与服务器的连接已断开，正在重新连接…",
+  /** 全屏自动拾取已开启（#1380：运营开关，每次进游戏提示一次） */
+  full_screen_pickup_tip: "全屏自动拾取已开启，屏幕内的掉落物会自动拾取",
   /** 实时通道断线之后又连回来了 */
   realtime_reconnected_tip: "已重新连接服务器",
   /** 实时通道被同账号的另一条连接顶掉（服务端一个账号只留一条连接，见 utils/net/RealtimeClient） */

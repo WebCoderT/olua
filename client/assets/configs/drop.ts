@@ -20,6 +20,14 @@ export interface DropRuntimeParams {
   /** 背包已满的提示 / 重试间隔（毫秒）：避免自动拾取时每帧刷屏 */
   fullTipInterval: number;
   /**
+   * 全屏自动拾取（#1380，快照覆写；默认 false = 现状只捡 autoPickupRadius 内）
+   *
+   * 开启后自动拾取半径放宽到 `FULL_SCREEN_PICKUP_RADIUS`（屏幕内掉落全部自动入包），
+   * 服务端拾取距离闸同步放宽（drop.service 的 FULL_SCREEN_PICK_RANGE 同值）——
+   * **两端口径必须一致**，进游戏时提示一次「全屏自动拾取已开启」。
+   */
+  fullScreenPickup: boolean;
+  /**
    * 多件掉落物的最小中心间距（像素）
    *
    * **服务端用，客户端不读**（#804）：散落坐标改由服务端算（`DropService.spawn` 的同心环
@@ -35,17 +43,25 @@ export interface DropRuntimeParams {
 }
 
 /**
+ * 全屏自动拾取半径（像素，#1380）：`dropRuntime.fullScreenPickup` 开启时的拾取半径。
+ * 1920×1080 设计分辨率可视半径 ≈1101px（半对角），1200 留余量；
+ * 服务端同值常量 FULL_SCREEN_PICK_RANGE（drop.service），两端口径必须一致。
+ */
+export const FULL_SCREEN_PICKUP_RADIUS = 1_200;
+
+/**
  * 生效中的手感参数（**对象引用恒定**，只改字段）
  *
  * 消费方（DropManager）在模块加载时就拿到了这个对象的引用，
  * 所以覆写必须是「原地改字段」而不是「换一个新对象」—— 换对象等于把改动写给空气。
  *
- * **初始全 0 = 快照没到**（#724 无本地兜底）：唯一来源是快照 `runtimeParams.drop` 段，
+ * **初始数值全 0 / 布尔 false = 快照没到**（#724 无本地兜底）：唯一来源是快照 `runtimeParams.drop` 段，
  * 契约保证进游戏前必到；0 半径/超时只在加载期存在，进游戏后就是服务端给的值。
  */
 export const dropRuntime: DropRuntimeParams = {
   autoPickupRadius: 0,
   fullTipInterval: 0,
+  fullScreenPickup: false,
   scatterMinDistance: 0,
   pickReplyTimeout: 0,
 };
@@ -53,13 +69,18 @@ export const dropRuntime: DropRuntimeParams = {
 /**
  * 覆写手感参数（#605；快照 `runtimeParams.drop` 段到达时调一次）
  *
- * 逐键覆写、只认已知键：服务端将来删掉某个参数，旧客户端里的残值也不会留在生效路径上；
- * 非有限数字（服务端漏字段 / 坏数据）保持当前值，不把半径覆写成 0 或 NaN。
+ * 按字段类型分派覆写（#1380）：数字键只认有限非负数（服务端漏字段 / 坏数据保持当前值，
+ * 不把半径覆写成 0 或 NaN）；布尔键只认 boolean——旧的 `Number()` 一把转会把 true 变成 1
+ * 写进布尔字段，覆写等于失效。
  */
 export function applyDropRuntime(params: Partial<DropRuntimeParams> | undefined): void {
   if (!params) return;
-  (Object.keys(dropRuntime) as Array<keyof DropRuntimeParams>).forEach((key) => {
+  // 数字键：只认有限非负数（服务端漏字段 / 坏数据保持当前值，不把半径覆写成 0 或 NaN）
+  const numberKeys = ["autoPickupRadius", "fullTipInterval", "scatterMinDistance", "pickReplyTimeout"] as const;
+  numberKeys.forEach((key) => {
     const value = Number(params[key]);
     if (Number.isFinite(value) && value >= 0) dropRuntime[key] = value;
   });
+  // 布尔键（#1380）：只认 boolean——旧的 `Number()` 一把转会把 true 变成 1 写进布尔字段，覆写等于失效
+  if (typeof params.fullScreenPickup === "boolean") dropRuntime.fullScreenPickup = params.fullScreenPickup;
 }

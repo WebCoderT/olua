@@ -51,6 +51,7 @@ import SoundManager from "./core/SoundManager";
 import StatusManager from "./core/StatusManager";
 import HoverTipManager from "./core/HoverTipManager";
 import GameUiHelper from "./helpers/GameUiHelper";
+import { dropRuntime } from "../configs/drop";
 import { RoleApi } from "./utils/net/Api";
 import { partyDialogLayout } from "../configs/hudLayout";
 import RoleSync from "./utils/net/RoleSync";
@@ -408,6 +409,8 @@ export class Game extends Component {
     // 新手引导（#402）：遮罩最后加 → 盖在 HUD 之上；进度从存档读（老档补成「已完成」，不会弹）。
     // 位置解析交给本类（摇杆与底部按钮都在这里持有），所以先注册 provider 再 open
     GuideStore.start(role);
+    // 全屏自动拾取开启提示（#1380）：每次进游戏说一次，屏幕正上方飘字（玩家要知道「为什么我没走过去东西就没了」）
+    if (dropRuntime.fullScreenPickup) GameUiHelper.createTip("full_screen_pickup_tip");
     this.guideOverlay = new GuideOverlay();
     GuideOverlay.setSpotProvider((spot) => this.resolveGuideSpot(spot));
     LayerManager.addToUILayer(this.guideOverlay);

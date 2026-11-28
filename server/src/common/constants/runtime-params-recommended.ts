@@ -32,6 +32,8 @@ export const RECOMMENDED_DROP_PARAMS = {
   protectMs: 30000,
   maxGroundPerMap: 1000,
   announceBoss: true,
+  /** 全屏自动拾取出厂关闭（#1380）：与加键前行为完全一致，开启是运营的临时动作 */
+  fullScreenPickup: false,
 } as const;
 
 /** 自动战斗与寻路（`runtime_params.auto_battle` 列；客户端消费） */

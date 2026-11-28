@@ -97,6 +97,14 @@ export class DropRuntimeParamsDto {
   @ApiProperty({ description: "boss 掉落是否发全服公告（30 秒最多一条）", example: true })
   @IsBoolean({ message: "必须是布尔值" })
   announceBoss: boolean;
+
+  @ApiProperty({
+    description:
+      "全屏自动拾取（#1380，默认 false）：开启后拾取距离闸放宽到全屏（1200px），屏幕内掉落物自动入包；进游戏会提示一次",
+    example: false,
+  })
+  @IsBoolean({ message: "全屏自动拾取开关必须是布尔值" })
+  fullScreenPickup: boolean;
 }
 
 /** 自动战斗 / 寻路参数（`configs/autoBattle.ts` 的行为部分，样式与颜色不在其中） */
@@ -331,6 +339,11 @@ export class UpdateDropRuntimeParamsDto {
   @IsOptional()
   @IsBoolean({ message: "必须是布尔值" })
   announceBoss?: boolean;
+
+  @ApiPropertyOptional({ description: "全屏自动拾取（#1380，默认 false）" })
+  @IsOptional()
+  @IsBoolean({ message: "全屏自动拾取开关必须是布尔值" })
+  fullScreenPickup?: boolean;
 }
 
 /** 部分更新：自动战斗分组 */
