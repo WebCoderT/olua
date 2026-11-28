@@ -15,8 +15,11 @@ import QuestDialog from "../dialogs/QuestDialog";
 import QuestDetailDialog from "../dialogs/QuestDetailDialog";
 import PartyDialog from "../dialogs/PartyDialog";
 import SettingsDialog from "../dialogs/SettingsDialog";
+import TitleUpgradeDialog from "../dialogs/TitleUpgradeDialog";
+import WarSoulDialog from "../dialogs/WarSoulDialog";
 import BottomNavBar from "./BottomNavBar";
 import BottomNavButton from "./BottomNavButton";
+import GrowthEntries from "./GrowthEntries";
 import RoleExpBar from "./RoleExpBar";
 import RoleHpOrb from "./RoleHpOrb";
 import RoleMpOrb from "./RoleMpOrb";
@@ -56,6 +59,10 @@ export default class BottomBar extends Node {
   private partyDialog = new PartyDialog();
   /** 设置弹窗（稿 21-settings：选择角色 / 退出登录） */
   private settingsDialog = new SettingsDialog();
+  /** 称号升级弹窗（#1381 成长线入口的临时落点：总览弹窗落地后换） */
+  private titleDialog = new TitleUpgradeDialog();
+  /** 战魂弹窗（#1381 成长线入口的临时落点：总览弹窗落地后换） */
+  private warSoulDialog = new WarSoulDialog();
   /** 功能按键区 */
   private navBar: BottomNavBar;
   /** 经验条 */
@@ -68,8 +75,10 @@ export default class BottomBar extends Node {
   private shortcutKeyBar: ShortcutKeyBar;
   /** 自动挂机开关按钮 */
   private autoFightButton: AutoFightButton;
+  /** 成长线入口行（称号 / 元神，#1381：prefab 化的两颗胶囊，悬在功能按键排正上方） */
+  private growthEntries: GrowthEntries | null = null;
 
-  constructor(role: Role, prefab: Prefab, chatPrefab: Prefab) {
+  constructor(role: Role, prefab: Prefab, chatPrefab: Prefab, growthPrefab: Prefab | null = null) {
     super("bottom_bar");
     // 注册弹窗，供数据层刷新：装备穿脱后的槽位/内观（StorageManager 装备变更流程）、背包显示（拾取/使用物品）
     RoleUIManager.registerRoleInfoDialog(this.roleInfoDialog);
@@ -114,6 +123,15 @@ export default class BottomBar extends Node {
     // 自动挂机开关（图标随挂机状态切换，状态由 AutoBattle 回调同步）
     this.autoFightButton = new AutoFightButton();
     anchor(paths.autoFight).addChild(this.autoFightButton);
+    // 成长线入口（#1381）：称号 → 称号升级弹窗 / 元神 → 战魂弹窗（总览弹窗落地后换过去）
+    const growthAnchor = anchor(paths.growthEntries);
+    if (growthAnchor) {
+      this.growthEntries = new GrowthEntries(growthPrefab, {
+        title: () => this.titleDialog.open(),
+        soul: () => this.warSoulDialog.open(),
+      });
+      growthAnchor.addChild(this.growthEntries);
+    }
   }
 
   /**

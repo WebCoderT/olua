@@ -73,6 +73,16 @@ export const bottomBarPrefab = {
     mpOrb: "MpOrb",
     shortcutBar: "ShortcutBar",
     autoFight: "AutoFight",
+    /** 成长线入口行锚点（#1381：悬在 NavBar 正上方，两颗胶囊挂在它下面） */
+    growthEntries: "GrowthEntries",
+  },
+};
+
+/** 成长线入口 prefab 的运行时契约（#1381）：两颗胶囊按钮，静态外观在 prefab，点击由代码接 */
+export const growthEntriesPrefab = {
+  nodes: {
+    title: "TitleEntry",
+    soul: "SoulEntry",
   },
 };
 
