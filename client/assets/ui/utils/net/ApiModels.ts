@@ -7328,6 +7328,10 @@ export type AutoBattleParams = {
    */
   classicWalkMode: boolean;
   /**
+   * 经典走路模式每一步的距离（像素）
+   */
+  classicStepLength: number;
+  /**
    * A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢
    */
   cellSize: number;
@@ -7750,6 +7754,10 @@ export type UpdateAutoBattleParams = {
    * 经典走路模式：一格一步的格子走动
    */
   classicWalkMode?: boolean;
+  /**
+   * 经典走路模式每一步的距离（像素）
+   */
+  classicStepLength?: number;
   /**
    * A* 网格单元边长（像素）
    */

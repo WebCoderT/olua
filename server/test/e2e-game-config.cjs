@@ -593,6 +593,7 @@ async function main() {
     checkEqual(runtimeRes.body?.data?.drop?.autoPickupRadius, runtime.drop.autoPickupRadius, "掉落拾取半径初值 = 出厂 seed");
     checkEqual(runtimeRes.body?.data?.autoBattle?.moveByRun, runtime.autoBattle.moveByRun, "自动战斗布尔开关初值 = 出厂 seed");
     checkEqual(runtimeRes.body?.data?.autoBattle?.classicWalkMode, runtime.autoBattle.classicWalkMode, "经典走路模式开关初值 = 出厂 seed（#1334）");
+    checkEqual(runtimeRes.body?.data?.autoBattle?.classicStepLength, runtime.autoBattle.classicStepLength, "经典模式步长初值 = 出厂 seed（#1340）");
     checkEqual(runtimeRes.body?.data?.guild?.nameMax, runtime.guild.nameMax, "帮会名上限初值 = 出厂 seed");
     checkEqual(runtimeRes.body?.data?.updatedAt, runtimeRow.updatedAt, "updatedAt = 快照那一列（库里被人改过就不是 0）");
 
@@ -602,16 +603,19 @@ async function main() {
     checkEqual(dropPatched.body?.data?.drop?.scatterMinDistance, runtime.drop.scatterMinDistance, "同组其它字段不动（部分更新）");
     checkEqual(dropPatched.body?.data?.guild?.nameMax, runtime.guild.nameMax, "别的分组不动");
 
-    const autoPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { moveByRun: false, classicWalkMode: true, cellSize: 24 } } });
+    const autoPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { moveByRun: false, classicWalkMode: true, classicStepLength: 150, cellSize: 24 } } });
     checkEqual(autoPatched.status, 200, "改自动战斗参数成功");
     checkEqual(autoPatched.body?.data?.autoBattle?.moveByRun, false, "布尔开关按提交值生效");
     checkEqual(autoPatched.body?.data?.autoBattle?.classicWalkMode, true, "经典走路模式开关按提交值生效（#1334）");
+    checkEqual(autoPatched.body?.data?.autoBattle?.classicStepLength, 150, "经典模式步长按提交值生效（#1340）");
     checkEqual(autoPatched.body?.data?.autoBattle?.cellSize, 24, "网格边长按提交值生效");
 
     const runtimeNegative = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: -1 } } });
     checkEqual(runtimeNegative.status, 400, "负半径 → 400（DTO 取值域）");
     const runtimeTooBig = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { cellSize: 0 } } });
     checkEqual(runtimeTooBig.status, 400, "网格边长 0 → 400（下限 8）");
+    const stepTooSmall = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { classicStepLength: 10 } } });
+    checkEqual(stepTooSmall.status, 400, "经典模式步长 10 → 400（下限 20，#1340）");
     const runtimeGuildInverted = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { guild: { nameMin: 14, nameMax: 12 } } });
     checkEqual(runtimeGuildInverted.status, 400, "帮会名最短 > 最长 → 400（跨字段校验）");
     checkEqual(runtimeGuildInverted.body?.code, 40000, "跨字段违反用参数非法 40000");

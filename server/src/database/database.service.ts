@@ -1866,8 +1866,16 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
         } catch {
           parsed = {};
         }
+        let changed = false;
         if (parsed.classicWalkMode === undefined) {
           parsed.classicWalkMode = false;
+          changed = true;
+        }
+        if (parsed.classicStepLength === undefined) {
+          parsed.classicStepLength = 100;
+          changed = true;
+        }
+        if (changed) {
           this.db
             .prepare("UPDATE runtime_params SET auto_battle = ? WHERE id = 1")
             .run(JSON.stringify(parsed));

@@ -118,6 +118,12 @@ export class AutoBattleParamsDto {
   @IsBoolean({ message: "必须是布尔值" })
   classicWalkMode: boolean;
 
+  @ApiProperty({ description: "经典走路模式每一步的距离（像素）", example: 100 })
+  @IsInt({ message: "必须是整数" })
+  @Min(20, { message: "经典模式步长至少 20 像素" })
+  @Max(600, { message: "经典模式步长不能超过 600 像素" })
+  classicStepLength: number;
+
   @ApiProperty({ description: "A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢", example: 40 })
   @IsInt({ message: "必须是整数" })
   @Min(8, { message: "A* 网格边长至少 8 像素" })
@@ -345,6 +351,13 @@ export class UpdateAutoBattleParamsDto {
   @IsOptional()
   @IsBoolean({ message: "必须是布尔值" })
   classicWalkMode?: boolean;
+
+  @ApiPropertyOptional({ description: "经典走路模式每一步的距离（像素）" })
+  @IsOptional()
+  @IsInt({ message: "必须是整数" })
+  @Min(20, { message: "经典模式步长至少 20 像素" })
+  @Max(600, { message: "经典模式步长不能超过 600 像素" })
+  classicStepLength?: number;
 
   @ApiPropertyOptional({ description: "A* 网格单元边长（像素）" })
   @IsOptional()
