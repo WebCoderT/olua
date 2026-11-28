@@ -7324,6 +7324,10 @@ export type AutoBattleParams = {
    */
   moveByRun: boolean;
   /**
+   * 经典走路模式：开启后移动为一格一步的格子走动（必须走完一步才走下一步，停点为格心）；关闭为连续移动
+   */
+  classicWalkMode: boolean;
+  /**
    * A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢
    */
   cellSize: number;
@@ -7742,6 +7746,10 @@ export type UpdateAutoBattleParams = {
    * 自动移动是否使用跑步速度
    */
   moveByRun?: boolean;
+  /**
+   * 经典走路模式：一格一步的格子走动
+   */
+  classicWalkMode?: boolean;
   /**
    * A* 网格单元边长（像素）
    */

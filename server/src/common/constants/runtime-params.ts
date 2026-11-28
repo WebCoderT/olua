@@ -62,6 +62,15 @@ export interface AutoBattleParams {
   maxTargetDistance: number;
   /** 自动移动是否使用跑步速度 */
   moveByRun: boolean;
+  /**
+   * 经典走路模式（#1334，默认 false = 现状连续移动）。
+   *
+   * 开启后移动为**一格一步**的传奇式格子走动：寻路结果不做视线拉直（路点 = 逐格格心），
+   * 角色必须走完当前这一格（落点钉在格心）才会开始下一步；步长恒为格子对角连线
+   * （直格 cellSize / 斜格 cellSize×√2），不再补「精确目标点」——停在目标格心。
+   * 客户端与 #811 服务端权威路径消费**同一个开关**，两端口径必须一致。
+   */
+  classicWalkMode: boolean;
   /** A* 网格单元边长（像素）：越小越贴合障碍、搜索越慢 */
   cellSize: number;
   /** 通行余量（像素）：障碍矩形向外扩张这么多再烙进网格 */
@@ -315,6 +324,7 @@ export const RUNTIME_PARAM_KEYS: Record<keyof RuntimeParams, string[]> = {
   autoBattle: [
     "maxTargetDistance",
     "moveByRun",
+    "classicWalkMode",
     "cellSize",
     "clearance",
     "repathInterval",

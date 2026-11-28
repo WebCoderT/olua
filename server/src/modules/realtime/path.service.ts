@@ -57,7 +57,8 @@ const SLOW_PATH_WARN_MS = 16;
  * - 八方向、对角 √2、**禁止切角**（两个正交邻格都得可走）、octile 启发、小顶堆开放集；
  * - 起点 / 目标格被挡住时就近改寻可行走格（起点 4 圈、目标 6 圈），目标格没被挪过时
  *   末尾补上精确目标点；
- * - 结果按「视线采样」拉直（采样步长 `cellSize / 2`）。
+ * - 结果按「视线采样」拉直（采样步长 `cellSize / 2`）；
+ *   （经典走路模式 `classicWalkMode` 开启时**不拉直、不补精确目标点** —— 一格一步，逐格格心）
  * 两端一致的好处：客户端预判「能到」时，服务端大概率也「能到」；不一致时以服务端为准。
  *
  * ===========================================================================
@@ -106,6 +107,18 @@ export class PathService {
       return this.empty("unreachable", startedAt);
     }
     const points = cells.map((cell) => cellCenter(grid, cell.col, cell.row));
+    // 经典走路模式（#1334）：一格一步 —— 路点保持逐格格心，不拉直、不补精确目标点（停在目标格心）；
+    // 连续移动维持原行为（拉直 + 精确目标点）
+    if (this.classicWalkMode()) {
+      const costMs = Date.now() - startedAt;
+      if (costMs > SLOW_PATH_WARN_MS) {
+        this.logger.warn(
+          `寻路耗时 ${costMs}ms（${mapId}，${grid.cols}×${grid.rows} 格）：超过 ${SLOW_PATH_WARN_MS}ms 说明搜索写成了 O(n²)` +
+            `，先从路点数 ${points.length} 与网格规模查起`,
+        );
+      }
+      return { points, unreachable: false, snapped, costMs, reason: null };
+    }
     // 目标格没被挪过就补上精确目标点：尽量贴近「真的走到那儿」而不是走到格心
     if (!snapped) points.push({ x: to.x, y: to.y });
     const smoothed = smooth(grid, points);
@@ -119,8 +132,8 @@ export class PathService {
     return { points: smoothed, unreachable: false, snapped, costMs, reason: null };
   }
 
-  /** 格子尺寸与通行余量（读客户端同一组参数；缺键按出厂 40 / 20） */
-  private gridSize(): { cellSize: number; clearance: number } {
+  /** auto_battle JSON 的解析（坏 JSON / 缺键按空对象，各键自己兜底） */
+  private autoBattleParams(): Partial<AutoBattleParams> {
     const raw = this.runtimeParams.get()?.auto_battle;
     let parsed: Partial<AutoBattleParams> = {};
     if (raw) {
@@ -131,6 +144,12 @@ export class PathService {
         parsed = {};
       }
     }
+    return parsed;
+  }
+
+  /** 格子尺寸与通行余量（读客户端同一组参数；缺键按出厂 40 / 20） */
+  private gridSize(): { cellSize: number; clearance: number } {
+    const parsed = this.autoBattleParams();
     const cellSize = Number(parsed.cellSize);
     const clearance = Number(parsed.clearance);
     return {
@@ -138,6 +157,11 @@ export class PathService {
       cellSize: Number.isFinite(cellSize) && cellSize >= 8 ? cellSize : 40,
       clearance: Number.isFinite(clearance) && clearance >= 0 ? clearance : 20,
     };
+  }
+
+  /** 经典走路模式（#1334）：缺键 / 坏 JSON / 值不对按关闭（= 旧的连续移动） */
+  private classicWalkMode(): boolean {
+    return this.autoBattleParams().classicWalkMode === true;
   }
 
   private empty(reason: PathResult["reason"], startedAt: number): PathResult {

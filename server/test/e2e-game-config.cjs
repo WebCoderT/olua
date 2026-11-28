@@ -592,6 +592,7 @@ async function main() {
     checkEqual(runtimeRes.status, 200, "运行时参数可读");
     checkEqual(runtimeRes.body?.data?.drop?.autoPickupRadius, runtime.drop.autoPickupRadius, "掉落拾取半径初值 = 出厂 seed");
     checkEqual(runtimeRes.body?.data?.autoBattle?.moveByRun, runtime.autoBattle.moveByRun, "自动战斗布尔开关初值 = 出厂 seed");
+    checkEqual(runtimeRes.body?.data?.autoBattle?.classicWalkMode, runtime.autoBattle.classicWalkMode, "经典走路模式开关初值 = 出厂 seed（#1334）");
     checkEqual(runtimeRes.body?.data?.guild?.nameMax, runtime.guild.nameMax, "帮会名上限初值 = 出厂 seed");
     checkEqual(runtimeRes.body?.data?.updatedAt, runtimeRow.updatedAt, "updatedAt = 快照那一列（库里被人改过就不是 0）");
 
@@ -601,9 +602,10 @@ async function main() {
     checkEqual(dropPatched.body?.data?.drop?.scatterMinDistance, runtime.drop.scatterMinDistance, "同组其它字段不动（部分更新）");
     checkEqual(dropPatched.body?.data?.guild?.nameMax, runtime.guild.nameMax, "别的分组不动");
 
-    const autoPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { moveByRun: false, cellSize: 24 } } });
+    const autoPatched = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { autoBattle: { moveByRun: false, classicWalkMode: true, cellSize: 24 } } });
     checkEqual(autoPatched.status, 200, "改自动战斗参数成功");
     checkEqual(autoPatched.body?.data?.autoBattle?.moveByRun, false, "布尔开关按提交值生效");
+    checkEqual(autoPatched.body?.data?.autoBattle?.classicWalkMode, true, "经典走路模式开关按提交值生效（#1334）");
     checkEqual(autoPatched.body?.data?.autoBattle?.cellSize, 24, "网格边长按提交值生效");
 
     const runtimeNegative = await api(base, "PATCH", "/api/admin/runtime-params", { token, body: { drop: { autoPickupRadius: -1 } } });
