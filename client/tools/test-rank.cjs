@@ -10,7 +10,7 @@
  * · 强度定位：满衔介于满阶称号与满阶战魂之间（0.39 < 0.525 < 0.675），rate 也夹在两者之间
  * · 价格曲线：晋到 N 阶 = priceBase × N²，逐阶递增，价格基数比称号/战魂都便宜
  * · 头顶红字：军衔是头上那行红字（排在角色名称与血条之间），文案模板带 {rank} 占位、未授衔为空串
- * · 接线：存档迁移（旧档 rank 补 0）、晋升链路、属性加成在服务端权威重算（#541）、入口按钮在角色信息弹窗（不走 NPC）
+ * · 接线：存档迁移（旧档 rank 补 0）、晋升链路、属性加成在服务端权威重算（#541）、入口按钮在角色信息弹窗；#1369 起入口 NPC 可配（npcs.feature）
  * · 工程口径：100 阶列表只在打开时建一次，切换选中不重建（避免重演商城「打开就卡」那个坑）
  *
  * 数据层跑在沙箱里（configs/game-config 的运行时表用**真实服务端种子**灌——见 lib/configs-sandbox.cjs
@@ -175,8 +175,9 @@ check(/function createRankCard/.test(uiHelperSource) && /function updateRankCard
 // #1120 拆分后：卡片尺寸收进 paintGrowthCard 的 spec（布局常量整体传入，零件不再点取 cardSize）
 check(/rankUpgradeDialogLayout\.list/.test(uiHelperSource) && /rankUpgradeDialogLayout\.attribute/.test(uiHelperSource) && /rankUpgradeDialogLayout\.badge/.test(uiHelperSource) && /rankAttributeLabels/.test(uiHelperSource), "军衔零件的几何、属性顺序都来自 configs（不写死）");
 check(/rankUpgradeDialogLayout/.test(dialogsLayoutSource) && /cardSize/.test(dialogsLayoutSource), "军衔弹窗布局常量（含卡片尺寸）在 configs/layout/dialogs");
-check(/new RankUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.rankButton/.test(roleInfoSource), "角色信息弹窗有「军衔」按钮打开军衔弹窗（唯一入口）");
-check(!/RankUpgradeDialog/.test(npcClicksSource), "军衔不走 NPC（入口只在角色信息弹窗）");
+check(/new RankUpgradeDialog\(\)\.open\(\)/.test(roleInfoSource) && /roleInfoDialogLayout\.rankButton/.test(roleInfoSource), "角色信息弹窗有「军衔」按钮打开军衔弹窗");
+// #1369：军衔入口 NPC 化 —— 绑定在服务端 npcs.feature（运营在管理端选），工厂登记在 npcFeatureHandlers
+check(/npcFeatureHandlers\["rank"\] = \(\) => new RankUpgradeDialog\(\)\.open\(\)/.test(npcClicksSource), "军衔入口 NPC 可配（featureHandlers 登记 rank → 军衔弹窗）");
 check(/createRankCard|updateRankCard|createRankBadge|upgradeRank\(\)/.test(dialogSource), "军衔弹窗接线：零件 + 晋升 + 状态刷新");
 check(/buildList\(role\?\.rank \?\? 0\);/.test(dialogSource) && !/buildList/.test(dialogSource.split("private selectLevel")[1].split("private updateCardStates")[0]), "100 阶列表只在打开时建一次，切换选中不重建（避免「点一下建 400 个节点」）");
 check(/updateRankCard\(card, target <= currentLevel, target === this\.selectedLevel\)/.test(dialogSource), "切换选中只刷受影响的两张卡片外观");

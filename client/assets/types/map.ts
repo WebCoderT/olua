@@ -21,6 +21,8 @@ export interface NPC {
 export interface NpcData extends NPC {
   /** NPC 编号（唯一） */
   id: string;
+  /** 入口功能绑定（#1369：'' = 没绑；title 称号 / soul 战魂 / rank 军衔 —— 点击直开对应弹窗） */
+  feature: string;
 }
 
 /** 地图编号

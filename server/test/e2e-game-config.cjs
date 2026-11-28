@@ -1513,6 +1513,29 @@ async function main() {
     checkEqual(viewerNpcWrite.status, 403, "观察员改 NPC → 403");
     checkEqual(viewerNpcWrite.body?.code, 30006, "观察员改 NPC → 30006（权限点不足）");
 
+    // #1369：入口功能绑定 —— 称号 / 战魂 / 军衔各绑一个 NPC，客户端点 NPC 直开对应弹窗
+    const npcFeatureSeed = npcsRes.body?.data?.list?.every((row) => row.feature === "" || row.feature === undefined ? true : ["title", "soul", "rank"].includes(row.feature));
+    check(Boolean(npcFeatureSeed), "出厂 feature 全是合法值（空串或三个功能键）");
+    const bindTitle1 = await api(base, "PATCH", "/api/admin/npcs/0101", { token, zoneId: ADMIN_ZONE, body: { feature: "title" } });
+    checkEqual(bindTitle1.status, 200, "0101 绑 title 成功");
+    checkEqual(bindTitle1.body?.data?.feature, "title", "响应里的 feature 已更新");
+    const bindTitle2 = await api(base, "PATCH", "/api/admin/npcs/0102", { token, zoneId: ADMIN_ZONE, body: { feature: "title" } });
+    checkEqual(bindTitle2.status, 200, "0102 换绑 title 成功");
+    const npcsAfterRebind = await api(base, "GET", "/api/admin/npcs", { token });
+    const titleHolders = (npcsAfterRebind.body?.data?.list ?? []).filter((row) => row.feature === "title").map((row) => row.id);
+    checkEqual(JSON.stringify(titleHolders), JSON.stringify(["0102"]), "title 只挂在 0102（换绑自动清掉 0101 的旧绑定）");
+    const bindFeatureInvalid = await api(base, "PATCH", "/api/admin/npcs/0101", { token, zoneId: ADMIN_ZONE, body: { feature: "teleport" } });
+    checkEqual(bindFeatureInvalid.status, 400, "feature 非法值 → 400");
+    const unbind = await api(base, "PATCH", "/api/admin/npcs/0102", { token, zoneId: ADMIN_ZONE, body: { feature: "" } });
+    checkEqual(unbind.body?.data?.feature, "", "空串 = 解绑");
+    const npcsAfterUnbind = await api(base, "GET", "/api/admin/npcs", { token });
+    checkEqual((npcsAfterUnbind.body?.data?.list ?? []).filter((row) => row.feature !== "").length, 0, "解绑后全表 feature 归零");
+    // 快照 npcs 段带 feature（客户端据此路由点击弹窗；快照要玩家令牌）
+    const npcFeaturePlayer = await api(base, "POST", "/api/auth/register", { body: { username: "npc_feature_player", password: "pass1234" } });
+    const snapshotNpcs = await api(base, "GET", "/api/game-config", { token: npcFeaturePlayer.body?.data?.token });
+    const snapshotNpc = (snapshotNpcs.body?.data?.npcs ?? []).find((row) => row.id === "0101");
+    check(Boolean(snapshotNpc) && "feature" in (snapshotNpc ?? {}), "玩家侧快照 npcs 段每行带 feature 字段", JSON.stringify(snapshotNpc));
+
     //#endregion
 
     //#region 十三、商城分类与上架商品（#758）：先建分类再上架 / 商品是关联数据只改售价与等级

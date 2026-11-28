@@ -61,6 +61,8 @@ export class AdminNpcController {
       "- `src`：素材目录（resources 相对路径；空串 = 该 NPC 不显示）。\n" +
       "- `scaleX` / `scaleY`：缩放（0.1~10，1 = 原尺寸）。\n" +
       "- `posX` / `posY`：偏移（像素，±4000，0 = 不偏移）。\n" +
+      "- `feature`：入口功能绑定（#1369，不传则不改；空串 = 解绑；`title` 称号 / `soul` 战魂 / `rank` 军衔）。" +
+      "绑上后客户端点击该 NPC 直开对应弹窗；同功能在别的 NPC 上的绑定自动清掉（一个功能同时只挂一个 NPC）。\n" +
       "- `id` 不存在 → 404（`50020`）。",
     permissions: [Permission.GAME_CONFIG_WRITE],
   })

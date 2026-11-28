@@ -1291,6 +1291,8 @@ export interface NpcRow {
   /** 精灵在节点内的偏移（0,0 = 不偏移） */
   pos_x: number;
   pos_y: number;
+  /** 入口功能绑定（#1369：'' = 没绑；'title' 称号 / 'soul' 战魂 / 'rank' 军衔 —— 客户端点击直开对应弹窗） */
+  feature: string;
   updated_at: number;
 }
 

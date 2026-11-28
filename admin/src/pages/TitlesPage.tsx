@@ -9,6 +9,7 @@ import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { FeatureNpcBindingCard } from "../components/FeatureNpcBindingCard";
 import { PageHeader } from "../components/PageHeader";
 
 /** 渠道徽章配色：可升级的绿、赠送的蓝、暂不放出的灰 */
@@ -120,6 +121,8 @@ export function TitlesPage() {
           </Button>
         </>}
       />
+
+      <FeatureNpcBindingCard feature="title" />
 
       <Card>
         <div className="flex flex-wrap items-end gap-2">

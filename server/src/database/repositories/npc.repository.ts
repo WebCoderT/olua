@@ -49,9 +49,23 @@ export class NpcRepository {
 
   update(row: NpcRow): { changes: number } {
     return this.db.execute(
-      `UPDATE npcs SET label = ?, dialog = ?, src = ?, scale_x = ?, scale_y = ?, pos_x = ?, pos_y = ?, updated_at = ? WHERE id = ?`,
-      [row.label, row.dialog, row.src, row.scale_x, row.scale_y, row.pos_x, row.pos_y, row.updated_at, row.id],
+      `UPDATE npcs SET label = ?, dialog = ?, src = ?, scale_x = ?, scale_y = ?, pos_x = ?, pos_y = ?, feature = ?, updated_at = ? WHERE id = ?`,
+      [row.label, row.dialog, row.src, row.scale_x, row.scale_y, row.pos_x, row.pos_y, row.feature, row.updated_at, row.id],
     );
+  }
+
+  /**
+   * 入口功能互斥（#1369）：把 feature 绑到 keepId 时，别的 NPC 身上同 feature 的旧绑定清空 ——
+   * 一个功能同时只挂一个 NPC。返回被清绑定的 id 清单（调用方做审计日志）。
+   */
+  clearFeatureExcept(feature: string, keepId: string): string[] {
+    const taken = this.db.all<{ id: string }>("SELECT id FROM npcs WHERE feature = ? AND id != ?", [feature, keepId]);
+    if (taken.length === 0) return [];
+    this.db.execute(
+      "UPDATE npcs SET feature = '', updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE feature = ? AND id != ?",
+      [feature, keepId],
+    );
+    return taken.map((row) => row.id);
   }
 
   findByKey(id: string): NpcRow | undefined {

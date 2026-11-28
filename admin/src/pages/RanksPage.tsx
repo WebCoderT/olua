@@ -8,6 +8,7 @@ import { Pagination } from "../components/Pagination";
 import { Badge, Button, Card, EmptyState, Input, Spinner, tableClass, tdClass, thClass, theadClass , Field } from "../components/ui";
 import { hasPermission } from "../store/session";
 import { toastSuccess } from "../store/toast";
+import { FeatureNpcBindingCard } from "../components/FeatureNpcBindingCard";
 import { PageHeader } from "../components/PageHeader";
 
 /** 属性摘要（列表列太窄，只报几个关键数；完整数值在编辑弹窗里） */
@@ -108,6 +109,8 @@ export function RanksPage() {
           </Button>
         </>}
       />
+
+      <FeatureNpcBindingCard feature="rank" />
 
       <Card>
         <div className="flex flex-wrap items-end gap-2">
