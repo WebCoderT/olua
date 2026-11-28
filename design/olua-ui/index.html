@@ -507,7 +507,9 @@ const SCREENS = [
   ['21','settings','设置','选择角色 / 退出登录（退出走确认框）','SettingsDialog.ts'],
   ['22','attributes','属性','战斗属性总览 / 四维加点 / 洗点','AttrAllocateDialog.ts'],
   ['23','item-detail','物品详情','装备完整版（绑定/溯源/标签/Ctrl 对比）+ 消耗品简版','createGoodDetailDialog (dialog-builder.ts)'],
-  ['24','npc-dialog','NPC 对话','全宽底部 30% 对话条：名牌 / 正文分页 / 任务快捷 / 未配置兜底（#state=long/quest/empty）','NpcDialog（待实现）']
+  ['24','npc-dialog','NPC 对话','全宽底部 30% 对话条：名牌 / 正文分页 / 任务快捷 / 未配置兜底（#state=long/quest/empty）','NpcDialog（待实现）'],
+  ['25','title-wardrobe','称号总览','全部称号佩戴切换：三态列表 / 名牌预览 / 佩戴-卸下 / 较当前 ±差值','TitleWardrobeDialog（待实现）'],
+  ['26','war-soul-wardrobe','元神总览','37 阶灵体回穿：三态列表 / 灵体预览 / 佩戴 / 外显开关 / 较当前 ±差值','WarSoulWardrobeDialog（待实现）']
 ];
 document.getElementById('screen-grid').innerHTML = SCREENS.map(([no,id,name,desc,file])=>`
   <a class="scr" href="screens/${no}-${id}.html" target="_blank">

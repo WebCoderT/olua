@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>26 · 元神总览（战魂佩戴切换） · Olua UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../ui.css">
+<style>
+/* ── 元神（战魂）总览 880×540：与稿 25 称号总览同构；37 阶全量链，回穿低阶属性自担 ── */
+.ward{position:relative;width:880px;height:540px}
+.wbody{display:grid;grid-template-columns:216px 1fr 224px;gap:var(--col-gap);height:392px;padding:0 18px}
+.wleft{display:flex;flex-direction:column;gap:8px;min-height:0}
+.wleft .tabs{justify-content:flex-start;gap:6px}
+.wleft .tab{font-size:11px;padding:4px 10px}
+.wlist{display:flex;flex-direction:column;gap:6px;overflow:auto;padding-right:4px;flex:1;min-height:0}
+.witem{height:42px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.24);cursor:pointer;transition:.2s}
+.witem:hover{border-color:var(--line-3)}
+.witem.on{border-color:var(--gold-3);background:linear-gradient(90deg,rgba(194,146,69,.15),transparent)}
+.witem .step{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  font-family:var(--font-num);font-size:11px;color:var(--text-3);border:1px solid var(--line-2)}
+.witem.on .step{background:var(--gold-3);color:var(--text-on-gold);border-color:var(--gold-4)}
+.witem .nm{font-size:12.5px;color:var(--text-1);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.witem.locked{opacity:.55;cursor:not-allowed}
+.witem.locked .nm{color:var(--text-4)}
+.witem .wear{flex:0 0 auto;font-size:10px;line-height:1;padding:3px 7px;border-radius:var(--r-pill);
+  color:var(--text-on-gold);background:var(--gold-3);letter-spacing:.08em}
+.witem .dot{flex:0 0 auto;width:5px;height:5px;border-radius:50%;background:var(--gold-3)}
+.witem.none .step{border-style:dashed;color:var(--text-4)}
+.witem.none .nm{color:var(--text-3)}
+/* 中：灵体预览（游戏内是散帧动画，这里用徽记示意） */
+.wcenter{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  border:var(--bw-1) solid var(--line-1);border-radius:var(--r-2);background:
+  radial-gradient(circle at 50% 30%,rgba(194,146,69,.14),rgba(0,0,0,.4) 74%)}
+.emblem{width:150px;height:150px;border-radius:50%;display:grid;place-items:center;position:relative;
+  border:var(--bw-2) solid var(--gold-2);background:radial-gradient(circle at 50% 34%,#3A2C1A,#120C08 76%);
+  box-shadow:var(--shadow-gold)}
+.emblem::after{content:"";position:absolute;inset:-9px;border-radius:50%;
+  border:1px dashed rgba(194,146,69,.4);animation:spin 22s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.emblem span{font-family:var(--font-display);font-size:44px;color:var(--gold-4);text-shadow:0 0 18px rgba(194,146,69,.5)}
+.wname{font-family:var(--font-display);font-size:16px;letter-spacing:.24em;color:var(--gold-4)}
+.wdesc{font-size:11.5px;color:var(--text-3);max-width:34ch;text-align:center;line-height:1.8}
+.wsrc{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-4);letter-spacing:.06em}
+.wsrc .ic{width:14px;height:14px;color:var(--gold-3)}
+/* 右：属性对比 + 佩戴 + 外显开关 */
+.wside{display:flex;flex-direction:column;padding-top:8px}
+.wside h4{font-family:var(--font-display);font-size:13px;letter-spacing:.2em;color:var(--gold-4);margin-bottom:4px}
+/* 8 行属性 + 开关 + 按钮 + 提示，比成长线密：收紧行距防溢出 */
+.wside .kv{padding:3px 0}
+.diff{margin-left:6px;font-size:10px;font-family:var(--font-num)}
+.diff.up{color:var(--jade)}
+.diff.down{color:var(--ember-4)}
+.diff.flat{color:var(--text-4)}
+.wact{margin-top:auto;padding-top:8px;border-top:var(--bw-1) solid var(--line-1)}
+.check{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11.5px;color:var(--text-3);cursor:pointer}
+.check .box{width:14px;height:14px;border-radius:var(--r-1);border:var(--bw-1) solid var(--line-2);
+  display:grid;place-items:center;color:var(--text-on-gold);background:rgba(0,0,0,.3)}
+.check.is-on .box{background:var(--gold-3);border-color:var(--gold-4)}
+.check .box svg{width:10px;height:10px;opacity:0}
+.check.is-on .box svg{opacity:1}
+.wbtn{margin:8px 0 4px}
+.showline{display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 10px;border-radius:var(--r-2);
+  border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.22);font-size:11px;line-height:1.5;color:var(--text-3)}
+.showline .ic{width:15px;height:15px;color:var(--ember-4)}
+</style>
+</head>
+<body>
+<div class="stage"><div class="stage-inner">
+  <div class="stage-bg stage-bg--blur"><img src="../assets/hero-bg.jpg"></div>
+  <div class="stage-scrim"></div>
+
+  <div class="layer layer--dialog center">
+    <div class="panel panel--rivet ward">
+      <div class="panel-head">
+        <span class="panel-eyebrow">SOUL · WARDROBE</span>
+        <h2 class="panel-title">元神总览</h2>
+        <button class="panel-close" aria-label="关闭">×</button>
+      </div>
+      <div class="wbody">
+
+        <!-- 左：全部 37 阶（≤12 已筑基可用，>12 未筑基锁定） -->
+        <div class="wleft">
+          <div class="tabs">
+            <button class="tab is-on">全部 <span class="badge num">37</span></button>
+            <button class="tab">已筑基 <span class="badge num">12</span></button>
+          </div>
+          <div class="wlist scroll">
+            <div class="witem none"><span class="step">空</span><span class="nm">不佩戴（隐藏灵体）</span></div>
+            <div class="witem"><span class="step">1</span><span class="nm">烈阳灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">2</span><span class="nm">碧波灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">3</span><span class="nm">寒霜灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">4</span><span class="nm">沧澜灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">5</span><span class="nm">紫电灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">6</span><span class="nm">烈焰灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">7</span><span class="nm">疾风灵体</span><span class="dot"></span></div>
+            <div class="witem on"><span class="step">8</span><span class="nm">幻海灵体</span></div>
+            <div class="witem"><span class="step">9</span><span class="nm">紫霄灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">10</span><span class="nm">玄波灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">11</span><span class="nm">鎏金灵体</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">12</span><span class="nm">沧浪灵体</span><span class="wear">佩戴中</span></div>
+            <div class="witem locked"><span class="step">13</span><span class="nm">碎冰灵体</span></div>
+            <div class="witem locked"><span class="step">14</span><span class="nm">月华灵体</span></div>
+            <div class="witem locked"><span class="step">15</span><span class="nm">紫微灵体</span></div>
+          </div>
+        </div>
+
+        <!-- 中：所选灵体预览（回看低阶第 8 阶「幻海灵体」） -->
+        <div class="wcenter">
+          <div class="emblem"><span>幻</span></div>
+          <div class="wname">幻海灵体</div>
+          <p class="wdesc">踏水而生的灵体，足下涟漪一圈圈荡开。</p>
+          <div class="wsrc">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 12l5 5L20 7"/></svg>
+            第 8 阶 · 已筑基（12 阶「沧浪灵体」佩戴中）
+          </div>
+        </div>
+
+        <!-- 右：属性对比（回穿低阶为负差值） + 佩戴 + 外显 -->
+        <div class="wside">
+          <h4>佩戴属性（较当前）</h4>
+          <dl>
+            <div class="kv"><dt>生命上限</dt><dd class="num">224 <span class="diff down">−207</span></dd></div>
+            <div class="kv"><dt>每秒回血</dt><dd class="num">2 <span class="diff down">−3</span></dd></div>
+            <div class="kv"><dt>物理攻击</dt><dd class="num">30~42 <span class="diff down">−27~39</span></dd></div>
+            <div class="kv"><dt>魔法攻击</dt><dd class="num">30~42 <span class="diff down">−27~39</span></dd></div>
+            <div class="kv"><dt>道术攻击</dt><dd class="num">30~42 <span class="diff down">−27~39</span></dd></div>
+            <div class="kv"><dt>物理防御</dt><dd class="num">9~12 <span class="diff down">−7~11</span></dd></div>
+            <div class="kv"><dt>魔法防御</dt><dd class="num">9~12 <span class="diff down">−7~11</span></dd></div>
+            <div class="kv"><dt>道术防御</dt><dd class="num">9~12 <span class="diff down">−7~11</span></dd></div>
+          </dl>
+          <div class="wact">
+            <div class="check is-on">
+              <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg></span>
+              头顶外显佩戴中的灵体
+            </div>
+            <button class="btn btn--primary wbtn btn--block" style="height:40px;font-size:15px">佩 戴</button>
+            <div class="showline">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 8v5m0 3v.01M10.3 3.9 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+              回穿低阶属性会降低
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="panel-foot"><span>升级仍走战魂升级弹窗（角色信息 → 战魂），佩戴切换不影响筑基进度</span><span>外显开关只管头顶灵体动画，属性始终按佩戴中的阶生效</span></div>
+    </div>
+  </div>
+
+</div></div>
+<script src="../stage.js"></script>
+</body>
+</html>
