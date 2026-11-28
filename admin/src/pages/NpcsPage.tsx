@@ -5,6 +5,7 @@ import { FrameAnimation } from "../components/FrameAnimation";
 import { IconField } from "../components/ImagePicker";
 import { anyPickerOpen } from "../components/pickerStack";
 import { Modal } from "../components/Modal";
+import { NpcAlignWorkbench } from "../components/NpcAlignWorkbench";
 import { Pagination } from "../components/Pagination";
 import { Button, Card, EmptyState, Field, Input, Spinner, tableClass, tdClass, thClass, theadClass } from "../components/ui";
 import { hasPermission } from "../store/session";
@@ -205,27 +206,15 @@ export function NpcsPage() {
             value={form.src}
             onChange={(path) => setForm({ ...form, src: path })}
           />
+          <Field label="对齐工作台" hint="拖画布调偏移、改数字调缩放；画布上看到的相对关系 = 游戏里摆出来的">
+            <NpcAlignWorkbench
+              src={form.src}
+              label={form.label}
+              value={{ scaleX: form.scaleX, scaleY: form.scaleY, posX: form.posX, posY: form.posY }}
+              onChange={(next) => setForm({ ...form, ...next })}
+            />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="横向缩放" hint="1 = 原尺寸（0.1~10）">
-              <Input
-                type="number"
-                step="0.1"
-                min={0.1}
-                max={10}
-                value={form.scaleX}
-                onChange={(event) => setForm({ ...form, scaleX: Number(event.target.value) })}
-              />
-            </Field>
-            <Field label="纵向缩放" hint="1 = 原尺寸（0.1~10）">
-              <Input
-                type="number"
-                step="0.1"
-                min={0.1}
-                max={10}
-                value={form.scaleY}
-                onChange={(event) => setForm({ ...form, scaleY: Number(event.target.value) })}
-              />
-            </Field>
             <Field label="横向偏移" hint="像素，0 = 不偏移（±4000）">
               <Input
                 type="number"
