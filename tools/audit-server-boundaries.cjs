@@ -266,7 +266,7 @@ const REPO_EDGES = {
   // 清空某图地面的跨进程待办（#805）：管理端插一行、实时进程轮询执行并回写
   "database/repositories/drop-clear-request.repository.ts": ["modules/drops", "modules/realtime"],
   // NPC 点位（#672）：点位归后台，只有地图域读写（管理端画布 + 配置快照）
-  "database/repositories/map-npc.repository.ts": ["modules/map", "modules/quest"],
+  "database/repositories/map-npc.repository.ts": ["modules/map", "modules/quest", "modules/game-config"],
   // 碰撞盒（#676）：与点位同理 —— 只有地图域读写（画布增删改 + 配置快照下发）；
   // 客户端是从快照里拿矩形自己建碰撞体的，没有第二个模块连这张表
   "database/repositories/map-collision.repository.ts": ["modules/map"],

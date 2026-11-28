@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatTime, npcsApi, PERMISSION } from "../api";
-import type { Npc, PageResult } from "../api";
+import type { CreateNpc, Npc, PageResult } from "../api";
 import { FrameAnimation } from "../components/FrameAnimation";
 import { IconField } from "../components/ImagePicker";
 import { anyPickerOpen } from "../components/pickerStack";
@@ -13,14 +13,26 @@ import { toastSuccess } from "../store/toast";
 import { PageHeader } from "../components/PageHeader";
 
 /**
- * NPC 配置管理（#258，养成配置第七页）
+ * NPC 配置管理（#258，#1379 起支持手动新建 / 删除）
  *
- * id 清单固定（被 Tiled 地图对象组引用，启动时 seed 落库）——**没有「新建」「删除」**，
- * 只有「编辑」。#603 第七域起**客户端不再存 NPC 的任何显示数据**：名称、素材目录、缩放、
- * 偏移都在这张表里，改完下次进游戏由 `GET /game-config` 快照整表重建客户端 `npcs`。
+ * id 由运营手填（保留 0002 / 1001 / 9002 的分段习惯）；删除前服务端查地图点位与任务引用，
+ * 有引用会 409 提示先删引用。#603 第七域起**客户端不再存 NPC 的任何显示数据**：名称、素材目录、
+ * 缩放、偏移都在这张表里，改完下次进游戏由 `GET /game-config` 快照整表重建客户端 `npcs`。
  * 只有点击行为（弹哪个窗）还在客户端 `configs/npcClicks`（那是 UI 组件，不能进库）。
  * 对话文案 seed 为空串（客户端暂无对话数据形态），在这里运营可维护。写操作要 `gameConfig:write`。
  */
+
+/** 新建表单初值（id / label 必填，其余给合法缺省） */
+const EMPTY_CREATE: CreateNpc = {
+  id: "",
+  label: "",
+  dialog: "",
+  src: "",
+  scaleX: 1,
+  scaleY: 1,
+  posX: 0,
+  posY: 0,
+};
 export function NpcsPage() {
   const canWrite = hasPermission(PERMISSION.GAME_CONFIG_WRITE);
   const [draftKeyword, setDraftKeyword] = useState("");
@@ -31,6 +43,9 @@ export function NpcsPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Npc | null>(null);
   const [form, setForm] = useState<Npc | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState<CreateNpc>({ ...EMPTY_CREATE });
+  const [deleting, setDeleting] = useState<Npc | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,12 +110,43 @@ export function NpcsPage() {
     }
   };
 
+  /** 新建：trim 后提交，成功后关弹窗并刷新（id 撞车 409 由请求层中文提示，保持弹窗） */
+  const submitCreate = async () => {
+    try {
+      const created = await npcsApi.create({ ...draft, id: draft.id.trim(), label: draft.label.trim() });
+      toastSuccess(`NPC「${created.id} · ${created.label}」已新建，去「地图管理」把它放到图上`);
+      setCreating(false);
+      setDraft({ ...EMPTY_CREATE });
+      await load();
+    } catch {
+      /* 保持弹窗打开 */
+    }
+  };
+
+  /** 删除：服务端有引用会 409（中文提示先删引用），那时保持确认弹窗打开 */
+  const submitDelete = async () => {
+    if (!deleting) return;
+    try {
+      await npcsApi.delete(deleting.id);
+      toastSuccess(`NPC「${deleting.id} · ${deleting.label}」已删除`);
+      setDeleting(null);
+      await load();
+    } catch {
+      /* 保持弹窗打开 */
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         title="NPC 配置"
-        description={<>id 清单固定（被 Tiled 地图对象组引用），只可编辑、不可新增 / 删除。客户端不再存 NPC 的任何显示数据 ——
+        description={<>id 由运营手填，可新建 / 编辑 / 删除（删除前会查地图点位与任务引用）。客户端不再存 NPC 的任何显示数据 ——
             名称 / 素材 / 缩放 / 偏移都在这里改，下次进游戏生效（点击行为仍在客户端按 id 接线）。</>}
+        actions={
+          <Button disabled={!canWrite} onClick={() => { setDraft({ ...EMPTY_CREATE }); setCreating(true); }}>
+            新建 NPC
+          </Button>
+        }
       />
 
       <Card>
@@ -160,9 +206,14 @@ export function NpcsPage() {
                   </td>
                   <td className={`${tdClass} text-xs text-ink-4`}>{formatTime(item.updatedAt)}</td>
                   <td className={`${tdClass} text-right`}>
-                    <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
-                      编辑
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="outline" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => openEdit(item)}>
+                        编辑
+                      </Button>
+                      <Button variant="danger" className="px-2.5 py-1 text-xs" disabled={!canWrite} onClick={() => setDeleting(item)}>
+                        删除
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -240,6 +291,83 @@ export function NpcsPage() {
               onChange={(event) => setForm({ ...form, dialog: event.target.value })}
             />
           </Field>
+        </Modal>
+      ) : null}
+
+      {creating ? (
+        <Modal
+          open
+          title="新建 NPC"
+          hint="id 手填（字母 / 数字 / 下划线 / 短横线，1~32 位），保留 0002 / 1001 / 9002 的分段习惯；建完在地图管理里放到图上。"
+          size="md"
+          onClose={() => setCreating(false)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setCreating(false)}>取消</Button>
+              <Button
+                disabled={!/^[A-Za-z0-9_-]{1,32}$/.test(draft.id.trim()) || !draft.label.trim()}
+                onClick={() => void submitCreate()}
+              >
+                新建
+              </Button>
+            </>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="id" hint="唯一；字母 / 数字 / 下划线 / 短横线，1~32 位">
+              <Input value={draft.id} placeholder="如 9003" onChange={(event) => setDraft({ ...draft, id: event.target.value })} />
+            </Field>
+            <Field label="名称">
+              <Input value={draft.label} placeholder="如 称号使者" onChange={(event) => setDraft({ ...draft, label: event.target.value })} />
+            </Field>
+          </div>
+          <IconField
+            label="素材目录"
+            hint="resources 下的相对路径（图集动画，如 npc/2125）；可留空，建完再补"
+            mode="atlas"
+            rootDir="npc"
+            placeholder="npc/2125"
+            value={draft.src ?? ""}
+            onChange={(path) => setDraft({ ...draft, src: path })}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="横向缩放" hint="0.1~10，缺省 1">
+              <Input type="number" step="0.1" min={0.1} max={10} value={draft.scaleX}
+                onChange={(event) => setDraft({ ...draft, scaleX: Number(event.target.value) })} />
+            </Field>
+            <Field label="纵向缩放" hint="0.1~10，缺省 1">
+              <Input type="number" step="0.1" min={0.1} max={10} value={draft.scaleY}
+                onChange={(event) => setDraft({ ...draft, scaleY: Number(event.target.value) })} />
+            </Field>
+          </div>
+          <Field label="对话文案" hint="可留空（≤2000 字）">
+            <textarea
+              className="min-h-[80px] w-full rounded-lg border border-line-strong bg-surface-0 px-3 py-2 text-sm text-ink-1 outline-none transition focus:border-jade"
+              maxLength={2000}
+              value={draft.dialog}
+              onChange={(event) => setDraft({ ...draft, dialog: event.target.value })}
+            />
+          </Field>
+        </Modal>
+      ) : null}
+
+      {deleting ? (
+        <Modal
+          open
+          title="删除 NPC"
+          hint="有地图点位或任务引用时会被服务端拒绝（提示先去对应页删引用），不会连带删除。"
+          size="sm"
+          onClose={() => setDeleting(null)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setDeleting(null)}>取消</Button>
+              <Button variant="danger" onClick={() => void submitDelete()}>确认删除</Button>
+            </>
+          }
+        >
+          <p className="text-sm text-ink-2">
+            确认删除 NPC「{deleting.id} · {deleting.label}」？此操作不可撤销。
+          </p>
         </Modal>
       ) : null}
     </div>

@@ -120,6 +120,11 @@ export class QuestRepository {
     return this.db.all<QuestRow>("SELECT * FROM quests ORDER BY id ASC");
   }
 
+  /** 引用了某个 NPC 的任务行数（#1379 删 NPC 前的引用检查） */
+  countByNpc(npcId: string): number {
+    return this.db.count("SELECT COUNT(1) AS total FROM quests WHERE npc_id = ?", [npcId]);
+  }
+
   /** 分页检索（默认按 id 数值序 —— 与后台的展示动线一致） */
   list(options: QuestListOptions): QuestRow[] {
     const { clause, params } = this.where(options);

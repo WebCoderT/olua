@@ -15,11 +15,10 @@ export interface NpcListOptions {
 }
 
 /**
- * NPC 基础数据访问（#258）
+ * NPC 基础数据访问（#258 / #1379 起支持运营手动增删）
  *
- * 与称号 / 战魂 / 军衔 / 装备基础件同一取向：**没有 insert / remove 的对外语义** ——
- * 行只能来自启动 seed（`seedRow`，INSERT OR IGNORE 幂等），后台接口不提供创建与删除
- * （NPC id 被 Tiled 地图对象组引用，清单固定）。
+ * 行可以来自启动 seed（`seedRow`，INSERT OR IGNORE 幂等），也可以来自管理端新建（`insert`）。
+ * 删除由 service 做引用检查（地图点位 / 任务），这里只管删行本身。
  */
 @Injectable()
 export class NpcRepository {
@@ -45,6 +44,30 @@ export class NpcRepository {
       `UPDATE npcs SET src = ?, scale_x = ?, scale_y = ?, pos_x = ?, pos_y = ? WHERE id = ? AND src = ''`,
       [row.src, row.scale_x, row.scale_y, row.pos_x, row.pos_y, row.id],
     ).changes;
+  }
+
+  /** 运营新建一行（#1379：唯一键撞车由 service 先查再报 50048，这里不做 upsert） */
+  insert(row: NpcRow): void {
+    this.db.run(
+      `INSERT INTO npcs (id, label, dialog, src, scale_x, scale_y, pos_x, pos_y, feature, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.label,
+        row.dialog,
+        row.src,
+        row.scale_x,
+        row.scale_y,
+        row.pos_x,
+        row.pos_y,
+        row.feature,
+        row.updated_at,
+      ],
+    );
+  }
+
+  remove(id: string): { changes: number } {
+    return this.db.execute("DELETE FROM npcs WHERE id = ?", [id]);
   }
 
   update(row: NpcRow): { changes: number } {

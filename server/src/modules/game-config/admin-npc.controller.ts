@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiParam } from "@nestjs/swagger";
 import { ApiDataResponse } from "../../common/decorators/api-data-response.decorator";
 import { ApiAdminDoc } from "../../common/decorators/api-doc.decorator";
@@ -9,14 +9,13 @@ import { Permission } from "../../common/constants/permission";
 import { PageResult } from "../../common/interfaces/api-envelope.interface";
 import { NPC_SORT, sortFieldNames } from "../../database/sort-specs";
 import { GameConfigService } from "./game-config.service";
-import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
+import { CreateNpcDto, NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
 
 /**
- * 管理端 · NPC 基础数据（#258）
+ * 管理端 · NPC 基础数据（#258 / #1379 起支持手动增删）
  *
- * 与称号 / 战魂 / 军衔 / 装备基础件同一取向：**只有 list / update，没有 create / remove** ——
- * NPC id 被 Tiled 地图对象组引用，清单固定（seed 自服务端 `npc-seed.ts` 的 21 个），
- * e2e 会固化「POST/DELETE 404」。
+ * 建 / 删 / 改都走这里（id 手填，保留分段命名习惯；删除前查地图点位与任务引用）。
+ * 出厂数据由出厂快照 seed 落库（见 `config-sync.sql` 的 npcs 段），运营新建的行混在同一张表里。
  *
  * #603 第七域起**客户端不再存 NPC 的任何显示数据**（此前 `configs/npc-data.ts` 有一份）：
  * 名称 / 素材目录 / 缩放 / 偏移全部在这里改，进游戏由 `GET /game-config` 的 `npcs` 段下发。
@@ -29,12 +28,29 @@ import { NpcDto, NpcPageDto, NpcQueryDto, UpdateNpcDto } from "./dto/npc.dto";
 export class AdminNpcController {
   constructor(private readonly gameConfigService: GameConfigService) {}
 
+  @Post()
+  @AuditTarget("npc")
+  @ApiAdminDoc({
+    operationId: "adminNpc.create",
+    summary: "新建 NPC（id 手填）",
+    description:
+      "运营手动加一行 NPC（#1379）：`id` 手填（字母 / 数字 / 下划线 / 短横线，1~32 位），保留 0002 / 1001 / 9002 这类分段命名习惯。\n\n" +
+      "- 同名 id → 409（`50048`）。\n" +
+      "- `label` 必填；`dialog` / `src` 缺省空串，缩放缺省 1、偏移缺省 0。\n" +
+      "- 建完在「地图管理」把该 NPC 点放到图上，客户端下次进图由快照取到。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiDataResponse(NpcDto, { description: "新建后的 NPC 基础数据" })
+  create(@Body() dto: CreateNpcDto): NpcDto {
+    return this.gameConfigService.createNpc(dto);
+  }
+
   @Get()
   @ApiAdminDoc({
     operationId: "adminNpc.list",
     summary: "NPC 基础数据列表",
     description:
-      "id 清单固定（seed 自服务端 npc-seed 的 21 个），**没有创建 / 删除**。" +
+      "清单含出厂 seed 行与运营手动新建的行（#1379）。" +
       "`keyword` 模糊匹配 id / 名称。\n\n" +
       "`src` / `scaleX` / `scaleY` / `posX` / `posY` 是外观（素材目录 + 缩放 + 偏移）：" +
       "客户端不再存这份数据，改完下次进游戏由配置快照整表重建。\n\n" +
@@ -70,5 +86,22 @@ export class AdminNpcController {
   @ApiDataResponse(NpcDto, { description: "更新后的 NPC 基础数据" })
   update(@Param("id") id: string, @Body() dto: UpdateNpcDto): NpcDto {
     return this.gameConfigService.updateNpc(id, dto);
+  }
+
+  @Delete(":id")
+  @AuditTarget("npc")
+  @ApiAdminDoc({
+    operationId: "adminNpc.delete",
+    summary: "删除 NPC（有引用则拒绝）",
+    description:
+      "删一行 NPC（#1379）。**还有地图点位或任务引用 → 409（`50049`）**，提示先去对应页删干净；" +
+      "不连带删引用、不碰玩家任务进度。无引用时删除成功，返回被删的那一行。\n\n" +
+      "注意：`npcs` 是配置快照整表导入的表——若之后导入了还含这个 id 的旧快照，它会被带回来（与其它可增删配置表一致）。",
+    permissions: [Permission.GAME_CONFIG_WRITE],
+  })
+  @ApiParam({ name: "id", description: "NPC id（如 \"9003\"）" })
+  @ApiDataResponse(NpcDto, { description: "被删掉的 NPC 基础数据" })
+  remove(@Param("id") id: string): NpcDto {
+    return this.gameConfigService.removeNpc(id);
   }
 }

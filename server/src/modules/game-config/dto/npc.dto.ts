@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from "class-validator";
 import { PageMetaDto, PageQueryDto } from "../../../common/dto/api-envelope.dto";
 import { NpcRow } from "../../../database/rows";
 
@@ -81,10 +81,69 @@ const MAX_SCALE = 10;
 const MAX_OFFSET = 4000;
 
 /**
+ * 新建 NPC 入参（#1379：id 手填，保留 0002 / 1001 / 9002 这类分段命名习惯）
+ *
+ * 只有身份与外观必填项；对话 / 入口功能绑定留空，建完走 PATCH 补。
+ * 同名 id 撞车 → 409（`50048`）。id 只限字母数字下划线短横线，避免快照 / 地图 / 前端路由里出现歧义字符。
+ */
+export class CreateNpcDto {
+  @ApiProperty({ description: "NPC id（字母 / 数字 / 下划线 / 短横线，1~32 位；如 9003）" })
+  @IsString({ message: "NPC id 必须是字符串" })
+  @Matches(/^[A-Za-z0-9_-]{1,32}$/, {
+    message: "NPC id 只能由字母、数字、下划线、短横线组成（1~32 位）",
+  })
+  id: string;
+
+  @ApiProperty({ description: "名称", maxLength: 50 })
+  @IsString({ message: "名称必须是字符串" })
+  @MaxLength(50, { message: "名称不能超过 50 字" })
+  label: string;
+
+  @ApiPropertyOptional({ description: "对话文案（缺省空串）", maxLength: 2000 })
+  @IsOptional()
+  @IsString({ message: "对话文案必须是字符串" })
+  @MaxLength(2000, { message: "对话文案不能超过 2000 字" })
+  dialog?: string;
+
+  @ApiPropertyOptional({ description: "素材目录（resources 相对路径；缺省空串 = 不显示）" })
+  @IsOptional()
+  @IsString({ message: "素材目录必须是字符串" })
+  @MaxLength(200, { message: "素材目录不能超过 200 字" })
+  src?: string;
+
+  @ApiPropertyOptional({ description: `横向缩放（${MIN_SCALE}~${MAX_SCALE}，缺省 1）` })
+  @IsOptional()
+  @IsNumber({}, { message: "横向缩放必须是数字" })
+  @Min(MIN_SCALE, { message: `横向缩放不能小于 ${MIN_SCALE}` })
+  @Max(MAX_SCALE, { message: `横向缩放不能大于 ${MAX_SCALE}` })
+  scaleX?: number;
+
+  @ApiPropertyOptional({ description: `纵向缩放（${MIN_SCALE}~${MAX_SCALE}，缺省 1）` })
+  @IsOptional()
+  @IsNumber({}, { message: "纵向缩放必须是数字" })
+  @Min(MIN_SCALE, { message: `纵向缩放不能小于 ${MIN_SCALE}` })
+  @Max(MAX_SCALE, { message: `纵向缩放不能大于 ${MAX_SCALE}` })
+  scaleY?: number;
+
+  @ApiPropertyOptional({ description: `横向偏移（像素，±${MAX_OFFSET}，缺省 0）` })
+  @IsOptional()
+  @IsNumber({}, { message: "横向偏移必须是数字" })
+  @Min(-MAX_OFFSET, { message: `横向偏移不能小于 -${MAX_OFFSET}` })
+  @Max(MAX_OFFSET, { message: `横向偏移不能大于 ${MAX_OFFSET}` })
+  posX?: number;
+
+  @ApiPropertyOptional({ description: `纵向偏移（像素，±${MAX_OFFSET}，缺省 0）` })
+  @IsOptional()
+  @IsNumber({}, { message: "纵向偏移必须是数字" })
+  @Min(-MAX_OFFSET, { message: `纵向偏移不能小于 -${MAX_OFFSET}` })
+  @Max(MAX_OFFSET, { message: `纵向偏移不能大于 ${MAX_OFFSET}` })
+  posY?: number;
+}
+
+/**
  * 编辑 NPC 数据入参（**部分更新**）
  *
- * **没有 Create / Delete**：NPC id 被 Tiled 地图对象组引用，清单固定 ——
- * 这是有意不提供的能力，不是漏了（e2e 会固化「POST/DELETE 路由不存在」）。
+ * #1379 起支持手动新建 / 删除；删除有引用检查（地图点位 / 任务），不连带清引用。
  *
  * #603 第七域起外观（src / scale / position）也归这里：运营改完下次进游戏生效
  * （快照整表重建客户端 `npcs`）。要「还原成原尺寸」就传 1 / 0，不需要删列。
