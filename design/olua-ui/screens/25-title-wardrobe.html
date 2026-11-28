@@ -30,6 +30,8 @@
 .witem.locked .nm{color:var(--text-4)}
 .witem .wear{flex:0 0 auto;font-size:10px;line-height:1;padding:3px 7px;border-radius:var(--r-pill);
   color:var(--text-on-gold);background:var(--gold-3);letter-spacing:.08em}
+.witem .eff{flex:0 0 auto;font-size:10px;line-height:1;padding:2px 6px;border-radius:var(--r-pill);
+  color:var(--jade);border:1px solid rgba(111,191,142,.55);letter-spacing:.08em}
 .witem .dot{flex:0 0 auto;width:5px;height:5px;border-radius:50%;background:var(--gold-3)}
 /* 「不佩戴」空卡 */
 .witem.none .step{border-style:dashed;color:var(--text-4)}
@@ -61,7 +63,10 @@
 .diff.up{color:var(--jade)}
 .diff.down{color:var(--ember-4)}
 .diff.flat{color:var(--text-4)}
-.wact{margin-top:auto;padding-top:10px;border-top:var(--bw-1) solid var(--line-1)}
+.wact{margin-top:auto;padding-top:8px;border-top:var(--bw-1) solid var(--line-1)}
+/* 佩戴（外显）与属性生效是两个独立槽位：并排两颗按钮，各管各的 */
+.wbtnrow{display:flex;gap:6px}
+.wbtnrow .btn{flex:1;height:38px;font-size:13px;white-space:nowrap;padding:0 6px;letter-spacing:.06em}
 .wbtn{margin:8px 0 4px}
 .showline{display:flex;align-items:center;gap:8px;margin-top:8px;padding:7px 10px;border-radius:var(--r-2);
   border:var(--bw-1) solid var(--line-1);background:rgba(0,0,0,.22);font-size:11px;line-height:1.5;color:var(--text-3)}
@@ -92,7 +97,7 @@
             <div class="witem none"><span class="step">空</span><span class="nm">不佩戴（隐藏名牌）</span></div>
             <div class="witem"><span class="step">1</span><span class="nm">飞龙在天</span><span class="dot" title="已获得"></span></div>
             <div class="witem"><span class="step">2</span><span class="nm">九龙拉棺</span><span class="dot"></span></div>
-            <div class="witem"><span class="step">3</span><span class="nm">龙战于野</span><span class="dot"></span></div>
+            <div class="witem"><span class="step">3</span><span class="nm">龙战于野</span><span class="eff">生效中</span></div>
             <div class="witem"><span class="step">4</span><span class="nm">潜龙勿用</span><span class="dot"></span></div>
             <div class="witem on"><span class="step">5</span><span class="nm">神龙摆尾</span><span class="wear">佩戴中</span></div>
             <div class="witem"><span class="step">6</span><span class="nm">笑看浮华苍生</span><span class="dot"></span></div>
@@ -112,34 +117,37 @@
           <p class="wdesc">龙尾横扫千军，招式凌厉的象征。</p>
           <div class="wsrc">
             <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 12l5 5L20 7"/></svg>
-            升级链第 5 档 · 消耗 5,000 绑定元宝获得
+            升级链第 5 档 · 已获得（外显佩戴中，属性未生效）
           </div>
         </div>
 
-        <!-- 右：属性对比（相对当前佩戴） + 佩戴操作 -->
+        <!-- 右：属性对比（较「属性生效中」的第 3 档） + 佩戴 / 生效双操作 -->
         <div class="wside">
-          <h4>佩戴属性（较当前）</h4>
+          <h4>属性（较生效中档）</h4>
           <dl>
-            <div class="kv"><dt>生命上限</dt><dd class="num">+73 <span class="diff flat">佩戴中</span></dd></div>
-            <div class="kv"><dt>每秒回血</dt><dd class="num">+1</dd></div>
-            <div class="kv"><dt>物理攻击</dt><dd class="num">11~16</dd></div>
-            <div class="kv"><dt>魔法攻击</dt><dd class="num">11~16</dd></div>
-            <div class="kv"><dt>道术攻击</dt><dd class="num">11~16</dd></div>
-            <div class="kv"><dt>物理防御</dt><dd class="num">3~4</dd></div>
-            <div class="kv"><dt>魔法防御</dt><dd class="num">3~4</dd></div>
-            <div class="kv"><dt>道术防御</dt><dd class="num">3~4</dd></div>
+            <div class="kv"><dt>生命上限</dt><dd class="num">73 <span class="diff up">+16</span></dd></div>
+            <div class="kv"><dt>每秒回血</dt><dd class="num">1 <span class="diff flat">±0</span></dd></div>
+            <div class="kv"><dt>物理攻击</dt><dd class="num">11~16 <span class="diff up">+3~4</span></dd></div>
+            <div class="kv"><dt>魔法攻击</dt><dd class="num">11~16 <span class="diff up">+3~4</span></dd></div>
+            <div class="kv"><dt>道术攻击</dt><dd class="num">11~16 <span class="diff up">+3~4</span></dd></div>
+            <div class="kv"><dt>物理防御</dt><dd class="num">3~4 <span class="diff up">+1~1</span></dd></div>
+            <div class="kv"><dt>魔法防御</dt><dd class="num">3~4 <span class="diff up">+1~1</span></dd></div>
+            <div class="kv"><dt>道术防御</dt><dd class="num">3~4 <span class="diff up">+1~1</span></dd></div>
           </dl>
           <div class="wact">
-            <button class="btn btn--primary wbtn btn--block" style="height:40px;font-size:15px" disabled>佩戴中</button>
+            <div class="wbtnrow">
+              <button class="btn btn--primary" disabled>已佩戴</button>
+              <button class="btn btn--primary">属性生效</button>
+            </div>
             <div class="showline">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 12l5 5L20 7"/></svg>
-              名牌常显头顶、全服可见；点「不佩戴」即卸下
+              佩戴只管外显，属性按生效档计算
             </div>
           </div>
         </div>
 
       </div>
-      <div class="panel-foot"><span>升级仍走称号升级弹窗（角色信息 → 称号），佩戴切换不影响升级链进度</span><span>选中已获得称号时按钮变「佩戴」，属性栏显示 ± 差值</span></div>
+      <div class="panel-foot"><span>升级仍走称号升级弹窗（角色信息 → 称号），佩戴切换不影响升级链进度</span><span>佩戴（外显）与属性生效是两个独立槽位，可分别指向不同称号</span></div>
     </div>
   </div>
 
