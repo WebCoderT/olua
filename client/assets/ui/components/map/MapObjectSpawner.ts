@@ -10,6 +10,7 @@ import QuestTalk from "../../utils/net/QuestTalk";
 import { markWorldInteractive } from "../../utils/input/UiHit";
 import { addObstacleCollider } from "../../utils/physics/ObstacleCollider";
 
+
 /** NPC 可交互半径（世界像素）：与服务端 talk 距离闸 QUEST_NPC_RADIUS 同口径（120px） */
 const NPC_INTERACT_RADIUS = 120;
 
@@ -54,6 +55,8 @@ export default class MapObjectSpawner {
 
   /** 按快照生成全部 NPC，并记录复活点 */
   spawnAll() {
+    // 换图重建：清掉上一张图的 NPC 寻路障碍登记（旧节点随旧地图销毁，不能留引用）
+    AutoBattle.clearNpcObstacles();
     const config = maps.get(this.mapId);
     if (!config) {
       console.warn(`[MapObjectSpawner] 地图 ${this.mapId} 的配置还没到，跳过 NPC 与复活点`);
@@ -99,6 +102,10 @@ export default class MapObjectSpawner {
     // 点它也不清掉当前攻击目标（见 LayerManager.isPointOnWorldInteractive）。
     // 标记就打在这个挂了点击监听的节点上：判定范围与它的点击范围天然一致
     markWorldInteractive(npcNode);
+    // 登记进寻路障碍（#1366）：NPC 是物理障碍但不在碰撞网格里，A* 路径会径直穿过 NPC 格，
+    // 角色顶在 NPC 上一直播走路动画 —— 寻路前把它与怪物一起烙进网格（登记在 AutoBattle，
+    // 换图由下一次 spawnAll 开头清）
+    AutoBattle.registerNpcObstacle(npcNode);
   }
 
   /**

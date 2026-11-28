@@ -73,5 +73,5 @@
 | `layer-sandbox.cjs` | 真实 `LayerManager` + 引擎语义 Node 垫片 | stub 路径要写 `"../../stubs/UiHit"`（写成 `../stubs/` 会解析到 `ui/stubs/`） |
 | `net-sandbox.cjs` | 真实请求层 | `XMLHttpRequest` 由测试注入 |
 
-现 **80 套** `client/tools/test-*.cjs` + **19 套** `tools/audit-*.cjs`（审计在仓库根）。
+现 **81 套** `client/tools/test-*.cjs` + **19 套** `tools/audit-*.cjs`（审计在仓库根）。
 `test-client-net` / `test-dialog-top` / `test-rank` / `test-title` / `test-bag-discard` 含**源码接线断言**（改签名要同步）。
