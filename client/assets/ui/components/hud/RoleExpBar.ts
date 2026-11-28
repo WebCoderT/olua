@@ -20,7 +20,7 @@ export default class RoleExpBar extends Node {
   constructor(role: Role) {
     super("role_exp_bar");
     const layout = bottomBarLayout.expBar;
-    this.setPosition(layout.position.x, layout.position.y, 0);
+    // 摆位归 prefab 锚点（#1361）：挂载时贴锚点原点，不再自己按配置定位
     // 三段横排：等级文字贴左、进度条居中、百分比贴右；条宽 = 总宽 − 两端文字 − 两侧间距
     const barWidth = layout.size.width - layout.levelLabel.width - layout.percentLabel.width - layout.gap * 2;
     const leftEdge = -layout.size.width / 2;

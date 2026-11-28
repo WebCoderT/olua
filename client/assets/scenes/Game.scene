@@ -294,6 +294,22 @@
       "__uuid__": "802bdcd2-cc9e-491e-9446-01a9bddabad3",
       "__expectedType__": "cc.Prefab"
     },
+    "smallMapPrefab": {
+      "__uuid__": "b820f63e-e4e5-4dc5-9103-27a11fa0ac40",
+      "__expectedType__": "cc.Prefab"
+    },
+    "bottomBarPrefab": {
+      "__uuid__": "bc3c8756-d3c0-4ec5-88e7-eab40ffacce7",
+      "__expectedType__": "cc.Prefab"
+    },
+    "messageLogPrefab": {
+      "__uuid__": "c25d9efa-88a8-439b-aedd-bb3458a0ec54",
+      "__expectedType__": "cc.Prefab"
+    },
+    "chatBoxPrefab": {
+      "__uuid__": "9ff32b3b-d11a-4268-b096-2db51457a253",
+      "__expectedType__": "cc.Prefab"
+    },
     "_id": "baQOg77ZRIe7zEZZ6eNDYe"
   },
   {

@@ -1,9 +1,9 @@
-import { Node, Size, UITransform } from "cc";
+import { instantiate, Node, Prefab, Size, UITransform } from "cc";
 import { Role } from "../../../entities/Role";
 import { SkillId } from "../../../types/skill";
 import { ShortcutKeys } from "../../../types/role";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
-import { bottomBarLayout } from "../../../configs/hudLayout";
+import { bottomBarLayout, bottomBarPrefab } from "../../../configs/hudLayout";
 import { bottomNavItems } from "../../../configs/bottomNav";
 import RoleUIManager from "../../core/RoleUIManager";
 import RoleInfoDialog from "../dialogs/RoleInfoDialog";
@@ -46,8 +46,8 @@ export default class BottomBar extends Node {
   private mallDialog = new MallDialog();
   /** 技能列表弹窗 */
   private skillListDialog = new SkillListDialog();
-  /** 聊天弹窗（#395：世界 / 帮会 / 私聊） */
-  private chatDialog = new ChatDialog();
+  /** 聊天弹窗（#395：世界 / 帮会 / 私聊；#1361 起 prefab 由 Game 注入） */
+  private chatDialog: ChatDialog;
   /** 任务弹窗（#396：进行中 / 可接，接取与交付都在这里） */
   private questDialog = new QuestDialog();
   /** 任务详情弹窗（#1191：描述 / 进度条 / 奖励 / 交付 NPC；入口是任务追踪栏的「详」） */
@@ -69,47 +69,58 @@ export default class BottomBar extends Node {
   /** 自动挂机开关按钮 */
   private autoFightButton: AutoFightButton;
 
-  constructor(role: Role) {
+  constructor(role: Role, prefab: Prefab, chatPrefab: Prefab) {
     super("bottom_bar");
     // 注册弹窗，供数据层刷新：装备穿脱后的槽位/内观（StorageManager 装备变更流程）、背包显示（拾取/使用物品）
     RoleUIManager.registerRoleInfoDialog(this.roleInfoDialog);
     RoleUIManager.registerBagDialog(this.bagDialog);
-    // 底部栏主体（尺寸/位置：固定值见 configs/hudLayout.bottomBar，改位置直接改配置）
-    this.addComponent(UITransform).setContentSize(bottomBarLayout.size);
-    this.setPosition(bottomBarLayout.position.x, bottomBarLayout.position.y, 0);
-    // 新稿（04-hud）不再画整条底板：各部分（血球/战斗列/按键区）自带底板，直接浮在场景上
-    // 但要在最底下垫一层暗角（稿 `.bottom::before`）：否则格与格之间的缝会露出亮色地块
-    const backdrop = GameUiHelper.createHudBackdrop("bottom_backdrop", bottomBarLayout.backdrop);
-    backdrop.setPosition(bottomBarLayout.backdrop.position.x, bottomBarLayout.backdrop.position.y, 0);
-    this.addChild(backdrop);
-    // 子组件（添加顺序即绘制层级）
-    // 组间竖分隔线（稿 .vsep）：压在底衬之上、按钮之下，纯装饰不参与命中
-    for (let i = 0; i < bottomBarLayout.separators.positions.length; i++) {
+    // 聊天窗的 prefab 由 Game 一并注入（聊天窗自身也是 prefab 化的，#1361）
+    this.chatDialog = new ChatDialog(chatPrefab);
+    if (!prefab) {
+      console.warn("[bottom-bar] prefab 未注入：请确认 Game 场景的 bottomBarPrefab 字段已绑定");
+      return;
+    }
+    // 实例化 prefab（#1361：底衬/分隔线锚点与七个子组件挂点都在 prefab，编辑器可视化改摆位）
+    const instance = instantiate(prefab) as Node;
+    this.addComponent(UITransform).setContentSize(instance.getComponent(UITransform)!.contentSize);
+    const children = instance.children.slice();
+    for (const child of children) child.setParent(this);
+    // 根位置以 prefab 为准（#1359 口径）
+    this.setPosition(instance.position.x, instance.position.y, 0);
+    const paths = bottomBarPrefab.nodes;
+    const anchor = (path: string): Node => {
+      const found = this.getChildByPath(path);
+      if (!found) console.warn(`[bottom-bar] prefab 缺节点: ${path}`);
+      return found as Node;
+    };
+    // 子组件（添加顺序即绘制层级；各组件自身不再定位，摆位由 prefab 锚点承载）
+    // 底衬（稿 `.bottom::before` 的底部暗角）：格与格之间的缝会露出亮色地块，垫在最底下 —— 渐变仍是代码画
+    anchor(paths.backdrop).addChild(GameUiHelper.createHudBackdrop("bottom_backdrop", bottomBarLayout.backdrop));
+    // 组间竖分隔线（稿 .vsep）：压在底衬之上、按钮之下，纯装饰不参与命中 —— 渐隐竖线仍是代码画
+    bottomBarPrefab.nodes.vseps.forEach((path, i) => {
       const spec = bottomBarLayout.separators;
       const rule = GameUiHelper.createVerticalRule(`bottom_vsep_${i}`, new Size(spec.width, spec.height), spec.color);
-      rule.setPosition(spec.positions[i].x, spec.positions[i].y, 0);
-      this.addChild(rule);
-    }
+      anchor(path).addChild(rule);
+    });
     this.navBar = new BottomNavBar(this.bottomNavBarButtons.filter((button) => button.key !== SETTINGS_KEY), role);
-    this.addChild(this.navBar);
+    anchor(paths.navBar).addChild(this.navBar);
     // 「设置」独立一颗（稿放在第二条竖分隔线之后；逻辑与其它入口一致，未做时给「开发中」提示）
     const settingsButton = this.bottomNavBarButtons.find((button) => button.key === SETTINGS_KEY);
     if (settingsButton) {
       const node = new BottomNavButton(settingsButton, role);
-      node.setPosition(bottomBarLayout.settingsButton.position.x, bottomBarLayout.settingsButton.position.y, 0);
-      this.addChild(node);
+      anchor(paths.settingsButton).addChild(node);
     }
     this.expBar = new RoleExpBar(role);
-    this.addChild(this.expBar);
+    anchor(paths.expBar).addChild(this.expBar);
     this.hpOrb = new RoleHpOrb(role);
-    this.addChild(this.hpOrb);
+    anchor(paths.hpOrb).addChild(this.hpOrb);
     this.mpOrb = new RoleMpOrb(role);
-    this.addChild(this.mpOrb);
+    anchor(paths.mpOrb).addChild(this.mpOrb);
     this.shortcutKeyBar = new ShortcutKeyBar(role);
-    this.addChild(this.shortcutKeyBar);
+    anchor(paths.shortcutBar).addChild(this.shortcutKeyBar);
     // 自动挂机开关（图标随挂机状态切换，状态由 AutoBattle 回调同步）
     this.autoFightButton = new AutoFightButton();
-    this.addChild(this.autoFightButton);
+    anchor(paths.autoFight).addChild(this.autoFightButton);
   }
 
   /**
@@ -161,10 +172,6 @@ export default class BottomBar extends Node {
     this.chatDialog.open(auto);
   }
 
-  /** 开聊天小窗时重贴左下角（关着时是 no-op，见 ChatDialog.refreshDock） */
-  refreshChatBoxDock() {
-    this.chatDialog.refreshDock();
-  }
 
   /** 打开队伍面板（收到组队邀请时 Game 也会走这里，让玩家直接看到「同意 / 拒绝」） */
   openParty() {

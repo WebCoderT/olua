@@ -330,7 +330,7 @@ try {
   console.log("\n— D. 会话口径：重新上线清空 / 不请求不落盘 —");
 
   guard(() => {
-    check(/new MessageLog\(\)/.test(game) && /LayerManager\.addToUILayer\(this\.messageLog\)/.test(game), "Game 里创建并挂进 UI 层");
+    check(/new MessageLog\(this\.messageLogPrefab!\)/.test(game) && /LayerManager\.addToUILayer\(this\.messageLog\)/.test(game), "Game 里用 prefab 创建并挂进 UI 层");
     const destroyBlock = game.slice(game.indexOf("onDestroy()"));
     const disposeAt = destroyBlock.indexOf("this.messageLog?.dispose()");
     const clearAt = destroyBlock.indexOf("MessageLogStore.clear()");

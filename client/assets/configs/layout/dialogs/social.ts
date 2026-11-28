@@ -3,7 +3,7 @@
  *
  * 拆分自原 configs/layout/dialogs.ts（#1115 批次 2），数值与注释原样保留。
  */
-import { Color, Size, Vec2 } from "cc";
+import { Size, Vec2 } from "cc";
 import { T } from "../tokens";
 
 export const guildDialogLayout = {
@@ -341,26 +341,8 @@ export const chatDialogLayout = {
   name: "chat_box",
   /** 稿 `.chat{width:424px;height:302px}` */
   size: new Size(424, 302),
-  /** 常驻停靠：屏幕左下角（稿 left 20 / bottom 18 → 中心 (-960+20+212, -540+18+151)） */
-  position: new Vec2(-728, -371),
-  /**
-   * 窗体底板（稿 `.chat .panel` 是 `panel panel--rivet`：暖炭褐半透明 + 古铜金发丝线 + r-3 + 四角铆钉）
-   *
-   * **必须与其它 HUD 面板同一套**：早前这里是 `scrim`（纯黑 62%）+ `surface[0]` 描边，
-   * 在小地图与底栏旁边看就是「一个没有边框的黑洞」—— 暖褐面板之间夹一块冷黑，
-   * 三处 UI 各说各话（2026-11-17 用户指出）。面板类统一 `surface.glass` + `line[3]`。
-   */
-  box: {
-    /** 稿 `.chat .panel` = `panel--rivet`：linear-gradient(160deg,rgba(28,20,12,.94),rgba(16,11,7,.9)) */
-    fill: new Color(19, 13, 8, 240),
-    /** 渐变亮端（顶）与过渡带占比：Graphics 没有渐变，用「底 + 顶带」近似 */
-    fillTop: new Color(28, 20, 12, 240),
-    fillTopRatio: 0.5,
-    border: T.line[3],
-    radius: T.radius.r3,
-    borderWidth: T.border.width,
-    padding: 12,
-  },
+  /** 常驻停靠位在 prefab 的 ChatBox 根节点上（#1361）：屏幕左下角（稿 left 20 / bottom 18） */
+  /** 窗体底板配色（fill/fillTop/border/radius/铆钉）序列化在 prefab 的 Box 节点 VectorPlate 上（#1361） */
   /**
    * 页签（四个：世界 / 同图 / 帮会 / 私聊；贴窗顶左侧一格排开）
    *
@@ -369,7 +351,7 @@ export const chatDialogLayout = {
    * 未选中 = 半透明黑底 + `line-2` 描边 + `text-3` 字。
    */
   tabs: {
-    y: 131,
+    /** 页签条的摆位在 prefab 的 TabsAnchor 锚点上（#1361）；页签相对锚点 y=0 */
     size: new Size(50, 22),
     columns: [-175, -120, -65, -10],
     radius: T.radius.r2,
@@ -381,12 +363,7 @@ export const chatDialogLayout = {
     idleBorder: T.line[2],
     fontSize: T.fontSize.f11,
   },
-  /**
-   * 头/底的 1px 暗分隔线（稿 `.chat-head{border-bottom:1px solid rgba(0,0,0,.55)}`、
-   * `.chat-in{border-top:1px solid rgba(0,0,0,.55)}`）
-   * 位置是分隔线在面板内的中心 y：头部下沿 = 151 - (9+22+8) = 112，输入行上沿 = -151 + 44 = -107
-   */
-  dividers: { color: new Color(0, 0, 0, 140), headY: 112, inputY: -107 },
+  /** 头/底两条 1px 暗分隔线是 prefab 的静态 Sprite：DividerHead (0,112) / DividerInput (0,-107)（#1361） */
   /** 消息列表（窗体主体，位于两条分隔线之间） */
   list: { name: "chat_message_list", position: new Vec2(0, 2), size: new Size(400, 210) },
   /**

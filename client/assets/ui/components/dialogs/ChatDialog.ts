@@ -1,4 +1,4 @@
-import { EditBox, Graphics, isValid, Label, Node, ScrollView, Size, Vec2 } from "cc";
+import { EditBox, Graphics, instantiate, isValid, Label, Node, Prefab, ScrollView, Size, Vec2 } from "cc";
 import GameUiHelper from "../../helpers/GameUiHelper";
 import LayerManager from "../../core/LayerManager";
 import OtherPlayerManager from "../../core/OtherPlayerManager";
@@ -9,12 +9,12 @@ import UiHelper from "../../helpers/UiHelper";
 import RealtimeClient, { RealtimeStatus } from "../../utils/net/RealtimeClient";
 import CombatChannel from "../../utils/net/CombatChannel";
 import type { ChatChannel, ChatEntry } from "../../utils/net/CombatChannel";
-import { chatDialogLayout as layout, T } from "../../../configs/hudLayout";
+import { chatBoxPrefab, chatDialogLayout as layout, T } from "../../../configs/hudLayout";
 import { getRelationColor } from "../../../configs/social";
 import { clearChildren } from "../../utils/node/NodeTree";
 import GuideStore from "../../core/GuideStore";
 import { GUIDE_EVENT } from "../../../types/guide";
-import BaseDialog, { createHDivider, createListEmpty } from "./dialog-kit";
+import BaseDialog, { createListEmpty } from "./dialog-kit";
 import { createTabStrip, paintTabStrip } from "./tab-kit";
 import { blockClickThrough } from "../../utils/input/UiHit";
 
@@ -68,6 +68,13 @@ export default class ChatDialog extends BaseDialog {
   private input: Node | null = null;
   /** ChatStore 订阅（打开期间有效；关闭时退订） */
   private unsubscribe: (() => void) | null = null;
+  /** 聊天窗 prefab（#1361：窗体底板/分隔线在 prefab，由 BottomBar 经 Game 注入） */
+  private chatPrefab: Prefab;
+
+  constructor(chatPrefab: Prefab) {
+    super();
+    this.chatPrefab = chatPrefab;
+  }
 
   /**
    * 打开/关闭聊天窗（#469 起为常驻左下角小窗）
@@ -85,10 +92,12 @@ export default class ChatDialog extends BaseDialog {
     // 引导（#402）：「别一个人玩」那一步就是「打开过聊天」—— 同样只在真打开之后发；
     // 自动开窗（auto）不算（见上）
     if (!auto) GuideStore.notify(GUIDE_EVENT.OPEN_CHAT);
-    this.dialog = GameUiHelper.createChatBox();
+    // 窗体骨架来自 prefab（#1361：底板/分隔线在 ChatBox.prefab，停靠位以 prefab 根为准）
+    this.dialog = instantiate(this.chatPrefab) as Node;
+    // 窗体整体拦截指针：聊天窗底下是可点地的世界，盖住的区域不该再把点击漏给寻路
+    blockClickThrough(this.dialog);
     LayerManager.addDialogToUILayer(this.dialog);
     this.createTabs();
-    this.createChrome();
     this.body = UiHelper.createGroupNode(`${layout.name}_body`, new Vec2());
     this.dialog.addChild(this.body);
     // 挂起气泡 + 订阅变化：弹窗开着的时候，新消息直接上屏当前页（并刷新页签角标）
@@ -109,39 +118,25 @@ export default class ChatDialog extends BaseDialog {
     ChatBubbles.setSuppressed(false);
   }
 
-  /** 重贴左下角（开小窗时由组合根调；关着时是 no-op） */
+  /** 重贴左下角：停靠位在 prefab 根节点上（#1361 prefab 为准），无需再按配置重贴 —— 开小窗时 no-op */
   refreshDock() {
-    if (this.dialog && isValid(this.dialog)) this.dialog.setPosition(layout.position.x, layout.position.y, 0);
+    /* 停靠位随 prefab；保留空实现以兼容开小窗流程的调用点 */
   }
 
   //#region 页签
 
-  /** 建四个页签（几何与社交弹窗同款） */
+  /** 建四个页签（几何与社交弹窗同款；挂在 prefab 的 TabsAnchor 锚点上，锚点承载摆位） */
   private createTabs() {
     const dialog = this.dialog;
     if (!dialog) return;
-    const { nodes, labels } = createTabStrip(dialog, layout.name, TABS, layout.texts.tabs, layout.tabs, (tab) => this.select(tab));
+    const anchor = dialog.getChildByName(chatBoxPrefab.nodes.tabsAnchor);
+    if (!anchor) {
+      console.warn(`[chat] prefab 缺节点: ${chatBoxPrefab.nodes.tabsAnchor}`);
+      return;
+    }
+    const { nodes, labels } = createTabStrip(anchor, layout.name, TABS, layout.texts.tabs, { ...layout.tabs, y: 0 }, (tab) => this.select(tab));
     this.tabNodes = nodes;
     this.tabLabels = labels;
-  }
-
-  /**
-   * 头/底两条 1px 暗分隔线
-   *
-   * 稿 `.chat-tools button{width:22px;height:22px}` 的两颗工具钮（清屏 / 收起）**已删**：
-   * 聊天窗 #469 起是常驻左下角小窗，不提供关闭入口（2026-11-18 用户拍板），清屏也无必要。
-   */
-  private createChrome() {
-    const dialog = this.dialog;
-    if (!dialog) return;
-    const { dividers } = layout;
-    // 分隔线：稿是 1px rgba(0,0,0,.55)，用填充条画（1px 描边在实机不渲染）
-    const width = layout.size.width - 2;
-    for (const y of [dividers.headY, dividers.inputY]) {
-      const line = createHDivider(`chat_divider_${y}`, width, dividers.color);
-      line.setPosition(0, y, 0);
-      dialog.addChild(line);
-    }
   }
 
   /** 切换页签（清空内容区重画；切走 = 该页已读） */
@@ -155,7 +150,7 @@ export default class ChatDialog extends BaseDialog {
   }
 
   private paintTabs() {
-    paintTabStrip(this.tabNodes, this.tabLabels, TABS, this.tab, layout.tabs);
+    paintTabStrip(this.tabNodes, this.tabLabels, TABS, this.tab, { ...layout.tabs, y: 0 });
   }
 
   /** 页签角标（私聊未读数；世界 / 帮会有气泡扛提醒，这里只标私聊） */

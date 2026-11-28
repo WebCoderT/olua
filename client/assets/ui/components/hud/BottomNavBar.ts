@@ -1,4 +1,4 @@
-import { Node } from "cc";
+import { Node, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
 import GameUiHelper, { BottomNavBarButton } from "../../helpers/GameUiHelper";
 import { bottomBarLayout } from "../../../configs/hudLayout";
@@ -16,7 +16,8 @@ export default class BottomNavBar extends Node {
   constructor(buttons: BottomNavBarButton[], role: Role) {
     super("bottom_nav_bar");
     const layout = bottomBarLayout.navBar;
-    GameUiHelper.applyRowStyle(this, layout.spacing, layout.position, layout.size);
+    // 摆位归 prefab 的 NavBar 锚点（#1361），这里传零点只施加横向排列与尺寸
+    GameUiHelper.applyRowStyle(this, layout.spacing, new Vec2(), layout.size);
     buttons.forEach((button) => {
       const node = new BottomNavButton(button, role);
       this.nodes.set(button.key, node);

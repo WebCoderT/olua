@@ -38,6 +38,69 @@ export const roleInfoBarPrefab = {
   },
 };
 
+//#region HUD prefab 化第二批（#1361：小地图 / 底部栏 / 聊天窗 / 消息记录）
+
+/**
+ * 小地图 prefab 的运行时契约（#1361，口径同 #1359：prefab 为准，代码只写文字内容）
+ *
+ * 静态骨架（铆钉面板 / 标题条 / 坐标文本）与**摆位锚点**（rail 网格、地图视口、下拉箭头）
+ * 固化在 `ui/prefabs/hud/SmallMap.prefab`；动态零件（底图、点位、路线、红点）由代码
+ * 挂在锚点上绘制 —— 挪锚点即挪整块动态区。
+ */
+export const smallMapPrefab = {
+  /** prefab 里的固定节点路径（相对根逐段匹配不递归，#1357 口径；改名要同步这里） */
+  nodes: {
+    mapName: "MapName",
+    channelLabel: "ChannelLabel",
+    chevron: "ChevronAnchor",
+    entryRail: "EntryRail",
+    mapView: "MapViewAnchor",
+    positionText: "PositionText",
+  },
+};
+
+/**
+ * 底部栏 prefab 的运行时契约（#1361）：底衬锚点 + 两条渐隐竖线锚点 + 七个子组件挂点。
+ * 子组件（血球/经验条/快捷键栏/挂机钮…）自身不再定位，摆位全部由这里的锚点承载。
+ */
+export const bottomBarPrefab = {
+  nodes: {
+    backdrop: "BackdropAnchor",
+    vseps: ["Vsep0", "Vsep1"],
+    navBar: "NavBar",
+    settingsButton: "SettingsButton",
+    expBar: "ExpBar",
+    hpOrb: "HpOrb",
+    mpOrb: "MpOrb",
+    shortcutBar: "ShortcutBar",
+    autoFight: "AutoFight",
+  },
+};
+
+/** 聊天窗 prefab 的运行时契约（#1361）：窗体底板与分隔线在 prefab，页签挂 TabsAnchor */
+export const chatBoxPrefab = {
+  nodes: {
+    tabsAnchor: "TabsAnchor",
+  },
+};
+
+/** 消息记录 prefab 的运行时契约（#1361）：面板/标题/底部注释在 prefab，动态行挂 RowsAnchor */
+export const messageLogPrefab = {
+  nodes: {
+    plate: "Plate",
+    headTitle: "HeadTitle",
+    count: "CountLabel",
+    den: "DenLabel",
+    capBar: "CapBarAnchor",
+    collapse: "CollapseAnchor",
+    rows: "RowsAnchor",
+    footLeft: "FootLeft",
+    footRight: "FootRight",
+  },
+};
+
+//#endregion
+
 /** 角色信息栏布局（坐标以信息栏中心为原点，逐值对照 04-hud 的 `.info` 段） */
 export const roleInfoBarLayout = {
   /** 信息栏自身尺寸（HUD 规范 344×84：左边缘距屏幕 20、顶边 18） */
@@ -130,8 +193,7 @@ export const bottomBarLayout = {
   backdrop: {
     /** 稿 `.bottom::before{inset:auto -46px -10px;height:126px}`：底栏宽 896 + 左右各 46 = 988 */
     size: new Size(988, 126),
-    /** 椭圆中心压在下沿：::before 底边在底栏底（-522）下方 10 → 比底栏中心高 6 */
-    position: new Vec2(0, 6),
+    /** 椭圆摆位在 prefab 的 BackdropAnchor 锚点上（#1361） */
     /** 同心椭圆层数（同色叠加出渐变；越多越平滑，DrawCall 不变） */
     steps: 24,
     /** 稿中心浓度 rgba(10,7,4,.82)（token 的 veil 是 .72，底衬按稿给足） */
@@ -144,7 +206,7 @@ export const bottomBarLayout = {
    * 「设置」不在这个容器里：稿把它单独放在第二条竖分隔线之后（见 settingsButton）。
    * 入口清单见 configs/bottomNav.bottomNavItems。
    */
-  navBar: { spacing: 6, position: new Vec2(106, -17), size: new Size(294, 44) },
+  navBar: { spacing: 6, size: new Size(294, 44) },
   /**
    * 单个功能按键（稿 .nbtn：44×44 竖排 —— 16px 描边图标 + 9px 功能名，右上角快捷键字母）
    *
@@ -162,7 +224,6 @@ export const bottomBarLayout = {
    * （barWidth 由总宽减去两端文字与间距推出，改 labelWidth / percentLabelWidth / gap 会联动）
    */
   expBar: {
-    position: new Vec2(-202, -32),
     size: new Size(256, 5),
     levelLabel: { width: 34, fontSize: T.fontSize.f10 },
     percentLabel: { width: 26, fontSize: T.fontSize.f10 },
@@ -176,7 +237,6 @@ export const bottomBarLayout = {
    * 血量文字居中在球心（对齐新稿：数值画在球内）
    */
   hpOrb: {
-    position: new Vec2(-393, 6),
     size: new Size(90, 90),
     text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: T.fontSize.f14 },
     /** 球下方的小标题（稿 `.orb-cap`：bottom -19 → 中心 -64；10px、字距拉开） */
@@ -187,7 +247,6 @@ export const bottomBarLayout = {
    * 坐标口径与 hpOrb 相同：position 是节点在底部栏里的位置，文字相对球心偏移
    */
   mpOrb: {
-    position: new Vec2(393, 6),
     size: new Size(90, 90),
     text: { position: new Vec2(0, 0), size: new Size(120, 14), fontSize: T.fontSize.f14 },
     /** 球下方的小标题（稿 `.orb-cap`：bottom -19 → 中心 -64；10px、字距拉开） */
@@ -199,7 +258,7 @@ export const bottomBarLayout = {
    * #1310：槽由 48×56 改为 48×48 正方形 —— 高度与宽度一致（图标本来就是方的，多出的 8px 只是空着）。
    * 四组共用底线 -19 不变，故栏中心由 9 上移到 5（底边仍 -19、顶边 29）。
    */
-  shortcutBar: { spacing: 4, position: new Vec2(-202, 5), size: new Size(256, 48) },
+  shortcutBar: { spacing: 4, size: new Size(256, 48) },
   /** 单个快捷键槽：图标尺寸 + 右下角按键名 + 居中冷却倒计时 */
   shortcutSlot: {
     size: new Size(48, 48),
@@ -214,7 +273,7 @@ export const bottomBarLayout = {
   /** 自动挂机开关（战斗列顶行的细长横条：矢量底板 + 刀剑图标 + 「挂机」文字；开 = 金边金字） */
   autoFight: {
     size: new Size(256, 26),
-    position: new Vec2(-202, 56),
+    /** 摆位在 prefab 的 AutoFight 锚点上（#1361） */
     label: { text: "挂机", position: new Vec2(4, 0), size: new Size(60, 12), fontSize: T.fontSize.f10, spacingX: 1 },
     /** 稿 `.auto svg{width:14px}`：图标与文字同排（图标偏左、文字偏右） */
     icon: { position: new Vec2(-16, 0), size: new Size(14, 14), stroke: 1.7 },
@@ -254,14 +313,13 @@ export const bottomBarLayout = {
     /** 渐变深端停靠位置（稿 70% 之后不再变暗） */
     gradientStop: 0.7,
   },
-  /** 「设置」独立按钮（稿第二条竖分隔线之后，44×44） */
-  settingsButton: { position: new Vec2(308, -17), size: new Size(44, 44) },
+  /** 「设置」独立按钮摆位在 prefab 的 SettingsButton 锚点上（#1361，尺寸 = navButton.size 44×44） */
   /**
    * 组间竖分隔线（稿 `.vsep`：1px 宽、44 高、上下透明、中间 line-3）
    * 两条：战斗列与功能键组之间、功能键组与设置之间
    */
   separators: {
-    positions: [new Vec2(-60, -17), new Vec2(267, -17)],
+    /** 两条竖线的摆位在 prefab 的 Vsep0 / Vsep1 锚点上（#1361） */
     width: 1,
     height: 44,
     color: T.line[3],
@@ -310,7 +368,7 @@ export const joystickLayout = {
 export const smallMapLayout = {
   /** 面板（稿 `.map .panel`：304 宽、r3、line-3 边、四角铆钉 —— 底板由 GameUiHelper.createDialogPanel 现画） */
   size: new Size(304, 256),
-  position: new Vec2(788, 398),
+  /** 根位置在 prefab 根节点上（#1361 prefab 为准） */
   /**
    * 功能入口 rail（稿 `.map-rail`）：**2 列、间距 5、共 7 个文字按钮**（#1310 起由描边图标改文字，
    * 玩家认不出图标含义）。世界 / 线路 / 排行榜 / 成就 / 消息(+红点) / 设置 / 声音 —— 排行榜与线路**在 rail 里**，
@@ -341,18 +399,10 @@ export const smallMapLayout = {
     fontSize: T.fontSize.f12,
     textColor: T.text[2],
   },
-  /** rail 容器中心：右缘贴面板左缘留 8 → x = -152-8-60.5；顶边与面板顶边对齐 → y = +128-59.5 */
-  entryGridPosition: new Vec2(-220.5, 68.5),
+  /** rail 容器摆位在 prefab 的 EntryRail 锚点上（#1361） */
   /** 标题条（稿 `.map-head`：高 40、内容居中 —— 图名 gold-5 + 「· N 线」text-4 + 下拉箭头 12px） */
   head: {
-    /** 条带在面板内的中心 y（稿 `.map-head` 中心 505，面板中心 398 → +107） */
-    y: 107,
-    nameFontSize: T.fontSize.f14,
-    nameColor: T.gold[5],
-    /** 稿 `.map-head b{letter-spacing:.16em}`：14px 下约 2px */
-    nameSpacingX: 2,
-    /** 「· N 线」副文字（分线图才显示；公共线为空） */
-    channel: { position: new Vec2(39, 107), size: new Size(64, 14), fontSize: T.fontSize.f10, color: T.text[4] },
+    /** 图名 / 副文字的摆位与配色在 prefab 的 MapName / ChannelLabel 节点上（#1361） */
     /**
      * 下拉箭头（稿 `svg 12px color text-3`，路径 M6 9l6 6 6-6 → icons.headChevron）
      * 有线号时排在「· N线」之后（x=88）；公共线没有副文字，箭头紧跟图名（x=30）——
@@ -365,7 +415,7 @@ export const smallMapLayout = {
    * 中心 y = +85（head 底）- 8（margin）- 85（半高）= -8；黑点/红点/底图都画在这里
    */
   contentSize: new Size(280, 170),
-  contentPosition: new Vec2(0, -6),
+  /** 内容区摆位在 prefab 的 MapViewAnchor 锚点上（#1361） */
   /** 内容区视口的外观（稿 `.map-view` 径向底 + 22px 网格 + 底图 opacity .5 + 内暗角 26px） */
   mapView: {
     /** 视口边线（极弱，只用来分界） */
@@ -390,7 +440,7 @@ export const smallMapLayout = {
   },
   /** 底部世界坐标（稿 `.map-foot`：右对齐、右距 12 / 下距 12 → 右缘 x=140，文字中心 y≈-108；格式 `X 128 Y 96`） */
   /** 底部世界坐标（稿 `.map-foot` 的 coord：右对齐、右缘 x=140（右距 12）、文字中心 y=-107） */
-  positionBar: { position: new Vec2(80, -107), size: new Size(120, 14), fontSize: T.fontSize.f10, color: T.text[4] },
+  /** 坐标文本摆位在 prefab 的 PositionText 节点上（#1361） */
 };
 
 //#endregion
@@ -610,31 +660,11 @@ export const questTrackerLayout = {
  * 与左下聊天块镜像；**只收系统消息**（系统 / 获得 / 战斗 / 任务），聊天对话在左下聊天。
  */
 export const messageLogLayout = {
-  /** 面板中心（收起时高度变小，纵向位置由组件按「底边不动」重算） */
-  position: new Vec2(764, -386),
+  /** 面板尺寸（收起时高度变小；位置与配色（fill/border/radius/铆钉）在 prefab 的 Plate 节点上，#1361） */
   size: new Size(352, 272),
-  radius: T.radius.r3,
-  fill: T.surface.glass,
-  border: T.line[3],
-  /** 左上角铆钉（稿 `.panel--rivet`；右下那颗会顶到 foot 注释，按小地图先例只留一颗） */
-  rivet: { offset: 9, size: 6, color: T.gold[3] },
-  /** 面板距屏幕右 / 下缘的距离（收起时按它重算中心 y，底边不动） */
-  edge: { right: 20, bottom: 18 },
   /** 标题行（稿 `.mlog-head`：标题 13px 金-4 + 计数 + 3px 容量条 + 收起钮，高 32） */
   head: {
     height: 32,
-    paddingX: 12,
-    title: "消息记录",
-    titleFontSize: T.fontSize.f13,
-    titleColor: T.gold[4],
-    titleSpacingX: 2,
-    /** 计数：当前条数（金）+ ` / 1000`（弱化）；数字右对齐固定槽位、后缀独立一列，位数变化时容量条不跳 */
-    countFontSize: T.fontSize.f10,
-    countColor: T.gold[4],
-    countDenColor: T.text[4],
-    countX: 66,
-    numWidth: 22,
-    denWidth: 34,
     /**
      * 容量条（稿 `.capbar`：3px 细条，当前 312/1000 的占比）：
      * 常色金阶、满格转朱红（即将清空）；宽度由「计数右缘 → 收起钮左缘」之间的剩余空间决定

@@ -1,4 +1,4 @@
-import { Node } from "cc";
+import { Node, Vec2 } from "cc";
 import { Role } from "../../../entities/Role";
 import { ShortcutKeys } from "../../../types/role";
 import { SkillId } from "../../../types/skill";
@@ -26,7 +26,8 @@ export default class ShortcutKeyBar extends Node {
   constructor(role: Role) {
     super("shortcut_key_bar");
     const layout = bottomBarLayout.shortcutBar;
-    GameUiHelper.applyRowStyle(this, layout.spacing, layout.position, layout.size);
+    // 摆位归 prefab 的 ShortcutBar 锚点（#1361），这里传零点只施加横向排列与尺寸
+    GameUiHelper.applyRowStyle(this, layout.spacing, new Vec2(), layout.size);
     role.shortcutKeys.forEach((config) => {
       const skill = skills.get(config.skillId as SkillId);
       const slot = new ShortcutKeySlot(

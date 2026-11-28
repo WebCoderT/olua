@@ -93,6 +93,22 @@ export class Game extends Component {
   @property({ type: Prefab })
   roleInfoBarPrefab: Prefab | null = null;
 
+  /** 小地图 prefab（#1361：右上角骨架，编辑器可视化改） */
+  @property({ type: Prefab })
+  smallMapPrefab: Prefab | null = null;
+
+  /** 底部栏 prefab（#1361：底衬锚点 + 七个子组件挂点） */
+  @property({ type: Prefab })
+  bottomBarPrefab: Prefab | null = null;
+
+  /** 消息记录 prefab（#1361：右下角面板与标题/底部注释） */
+  @property({ type: Prefab })
+  messageLogPrefab: Prefab | null = null;
+
+  /** 聊天窗 prefab（#1361：左下常驻窗骨架，经 BottomBar 转交给 ChatDialog） */
+  @property({ type: Prefab })
+  chatBoxPrefab: Prefab | null = null;
+
   /** 地图组件 */
   private gameMap: GameMap;
   /** 主角组件 */
@@ -353,7 +369,7 @@ export class Game extends Component {
     this.screenClickInput = new ScreenClickInput(this.roleDisplay);
     this.cursorInput = new CursorInput();
     // 初始化底部栏（其内部自行组装功能按键区/血球/经验条/快捷键栏，并持有各弹窗）
-    this.bottomBar = new BottomBar(role);
+    this.bottomBar = new BottomBar(role, this.bottomBarPrefab!, this.chatBoxPrefab!);
     LayerManager.addToUILayer(this.bottomBar);
     RoleUIManager.registerBottomBar(this.bottomBar);
     /** 将角色信息栏加入游戏UI */
@@ -367,7 +383,7 @@ export class Game extends Component {
     );
     LayerManager.addToUILayer(this.questTracker);
     /** 小地图（右上角常驻，依赖主角组件取世界坐标） */
-    this.smallMap = new SmallMap(this.roleDisplay);
+    this.smallMap = new SmallMap(this.roleDisplay, this.smallMapPrefab!);
     LayerManager.addToUILayer(this.smallMap);
     /**
      * 消息记录（#1224：右下角常驻，稿 04-hud `.mlog`）
@@ -376,7 +392,7 @@ export class Game extends Component {
      * 数据纯内存（`MessageLogStore`，不落存档、不发请求），离开游戏场景即清空 ——
      * 「重新上线就清空」由 `onDestroy` 里的 dispose + clear 保证。
      */
-    this.messageLog = new MessageLog();
+    this.messageLog = new MessageLog(this.messageLogPrefab!);
     LayerManager.addToUILayer(this.messageLog);
     /**
      * 操作摇杆（左下角常驻；节点归摇杆组件，输入逻辑在下面注入给主角组件）

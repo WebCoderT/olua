@@ -1,4 +1,4 @@
-import { Graphics, Label, Node, Size, UITransform, Vec2, isValid } from "cc";
+import { Graphics, Label, Node, Prefab, Size, UITransform, Vec2, instantiate, isValid } from "cc";
 import MessageLogStore from "../../core/MessageLogStore";
 import type { MessageLogEntry } from "../../core/MessageLogStore";
 import SoundManager from "../../core/SoundManager";
@@ -6,7 +6,7 @@ import UiHelper from "../../helpers/UiHelper";
 import { HAS_MOUSE, trackUiPress } from "../../utils/input/Pointer";
 import { blockClickThrough } from "../../utils/input/UiHit";
 import { clearChildren } from "../../utils/node/NodeTree";
-import { messageLogLayout as layout, T } from "../../../configs/hudLayout";
+import { messageLogLayout as layout, T, messageLogPrefab } from "../../../configs/hudLayout";
 
 /**
  * 消息记录（#1224 建 / #1229 扩成个人流水：HUD 右下角常驻，稿 `design/olua-ui/screens/04-hud.html` 的 `.mlog`）
@@ -18,10 +18,15 @@ import { messageLogLayout as layout, T } from "../../../configs/hudLayout";
  * 正文：最近 `rows.count` 条，每行「时间 + 分类标签 + 正文」；底部注明「不含聊天对话 / 满 1000 条自动清空」。
  * 分类是数据驱动的（`layout.rows.tagTexts` / `tagColors`）：加一类只改 configs/layout，本文件不动。
  *
+ * ## 骨架与动态的边界（#1361 HUD prefab 化）
+ * 面板底板（VectorPlate）/ 标题 / 计数列 / 底部注释 / 摆位锚点在 `ui/prefabs/hud/MessageLog.prefab`，
+ * 摆位与配色可在编辑器可视化改；动态零件（容量条 / 收起钮 / 消息行）由代码挂在锚点上绘制，
+ * 收起/展开只切显隐与面板尺寸（VectorPlate 随尺寸重画），不重建静态骨架。
+ *
  * ## 数据与生命周期
  * - 数据只在 `MessageLogStore`（纯内存：不落存档、不发请求，重新上线即清空）；
  * - 写入方主要是 `ui/core/storage/role-delta-log.ts`（角色数据差分），本类只读；
- * - 本类**不发请求、不存状态**，订阅 onChange 整块重画（最多 10 行，比差量更新省心且不会漏）；
+ * - 本类**不发请求、不存状态**，订阅 onChange 局部重画（行区整块重建，最多 10 行）；
  * - 离开游戏场景时组合根先 `dispose()` 再 `MessageLogStore.clear()`（#1188 口径：先退订再 reset，
  *   否则销毁期 emit 会摸到被 `_destruct` 置 null 的字段）。
  *
@@ -33,16 +38,74 @@ export default class MessageLog extends Node {
   private unsubscribe: (() => void) | null = null;
   /** 收起态（只影响本组件的显示，不进存档 —— 会话内即时生效即可） */
   private collapsed = false;
-  /** 底板（本节点自带的 Graphics：面板框 + 铆钉 + 分隔线都画在这里） */
-  private plate: Graphics;
+  /** 面板底板节点（VectorPlate 随尺寸重画；收起/展开只改它的 contentSize） */
+  private plateNode: Node;
+  /** 计数 / 上限文本 */
+  private countLabel: Label;
+  private denLabel: Label;
+  /** 容量条绘制层（挂 CapBarAnchor 原点） */
+  private capGraphics: Graphics;
+  /** 收起钮零件（挂 CollapseAnchor 原点；hover 重绘走 Graphics） */
+  private collapseLabel: Label;
+  /** 消息行容器（挂 RowsAnchor；整块重建） */
+  private rowsAnchor: Node;
+  /** 头部零件与它们的 prefab 设计位（收起时挪到剩余面板中心，展开时还原 —— 位置真相仍是 prefab） */
+  private headNodes: Node[] = [];
+  private headYs: number[] = [];
+  /** 底部注释零件（收起时隐藏） */
+  private footNodes: Node[] = [];
+  /** prefab 根位置（收起/展开按「底边不动」重算中心的基准） */
+  private rootHome = { x: 0, y: 0 };
 
-  constructor() {
+  constructor(prefab: Prefab) {
     super("message_log");
-    const transform = this.addComponent(UITransform);
-    transform.setContentSize(layout.size);
+    if (!prefab) {
+      console.warn("[message-log] prefab 未注入：请确认 Game 场景的 messageLogPrefab 字段已绑定");
+      return;
+    }
+    // 实例化 prefab：把根节点子树挂到 this（#1361）
+    const instance = instantiate(prefab) as Node;
+    this.addComponent(UITransform).setContentSize(instance.getComponent(UITransform)!.contentSize);
+    const children = instance.children.slice();
+    for (const child of children) child.setParent(this);
+    this.rootHome = { x: instance.position.x, y: instance.position.y };
+    this.setPosition(this.rootHome.x, this.rootHome.y, 0);
     // 面板整体挡穿透：命中区罩住整块，点消息记录不会顺带把角色走过去
     blockClickThrough(this);
-    this.plate = this.addComponent(Graphics);
+
+    const paths = messageLogPrefab.nodes;
+    const nodeOf = (path: string): Node | null => {
+      const found = this.getChildByPath(path);
+      if (!found) console.warn(`[message-log] prefab 缺节点: ${path}`);
+      return found;
+    };
+    const labelOf = (path: string): Label | null => {
+      const comp = nodeOf(path)?.getComponent(Label) ?? null;
+      if (!comp) console.warn(`[message-log] 节点缺 Label 组件: ${path}`);
+      return comp;
+    };
+    this.plateNode = nodeOf(paths.plate)!;
+    this.countLabel = labelOf(paths.count)!;
+    this.denLabel = labelOf(paths.den)!;
+    this.rowsAnchor = nodeOf(paths.rows)!;
+    const headTitle = nodeOf(paths.headTitle);
+    if (headTitle) this.headNodes.push(headTitle);
+    for (const path of [paths.count, paths.den, paths.capBar, paths.collapse]) {
+      const node = nodeOf(path);
+      if (node) this.headNodes.push(node);
+    }
+    this.headYs = this.headNodes.map((node) => node.position.y);
+    for (const path of [paths.footLeft, paths.footRight]) {
+      const node = nodeOf(path);
+      if (node) this.footNodes.push(node);
+    }
+    // 底部分隔细线是 prefab 静态 Sprite（FootRule 不在契约里，按名字取；缺了只少一条装饰线）
+    const footRule = this.getChildByPath("FootRule");
+    if (footRule) this.footNodes.push(footRule);
+
+    // 动态零件建在锚点上（原点挂载，摆位归 prefab 锚点）
+    this.capGraphics = nodeOf(paths.capBar)!.addComponent(Graphics);
+    this.buildCollapseButton(nodeOf(paths.collapse)!);
     this.unsubscribe = MessageLogStore.onChange(() => this.render());
     this.render();
   }
@@ -55,96 +118,41 @@ export default class MessageLog extends Node {
     }
   }
 
-  /** 整块重画：底板 + 标题行（含计数/容量条/收起钮）+ 最近若干行 + 底部注释 */
+  /** 局部重画：面板尺寸/位置（收起切换）+ 计数 + 容量条 + 消息行 + 收起钮文字；静态骨架不动 */
   private render() {
     if (!isValid(this)) return;
     const width = layout.size.width;
     const height = this.collapsed ? layout.head.height : layout.size.height;
     const transform = this.getComponent(UITransform);
     if (transform) transform.setContentSize(width, height);
-    // 底边不动地变高/变矮：稿里面板贴屏幕右下，收起时应当从顶部往下折（底边留在 bottom 处）
-    this.setPosition(layout.position.x, layout.position.y - (layout.size.height - height) / 2);
-    clearChildren(this);
-    this.drawPlate(width, height);
-    this.addHead(width, height);
-    if (!this.collapsed) {
-      this.addRows(width, height);
-      this.addFoot(width, height);
-    }
-  }
-
-  /** 底板：半透明面板 + 1px 金线 + 左上铆钉（稿 `.panel` / `.panel--rivet` 只留左上那颗） */
-  private drawPlate(width: number, height: number) {
-    this.plate.clear();
-    this.plate.fillColor = layout.fill;
-    this.plate.roundRect(-width / 2, -height / 2, width, height, layout.radius);
-    this.plate.fill();
-    this.plate.lineWidth = T.border.width;
-    this.plate.strokeColor = layout.border;
-    this.plate.roundRect(-width / 2, -height / 2, width, height, layout.radius);
-    this.plate.stroke();
-    this.plate.fillColor = layout.rivet.color;
-    this.plate.circle(-width / 2 + layout.rivet.offset, height / 2 - layout.rivet.offset, layout.rivet.size / 2);
-    this.plate.fill();
-  }
-
-  /** 标题行：标题 + `N / 1000` + 容量条 + 收起钮（稿 `.mlog-head`） */
-  private addHead(width: number, height: number) {
-    const head = layout.head;
-    const left = -width / 2 + head.paddingX;
-    const right = width / 2 - head.paddingX;
-    const centerY = height / 2 - head.height / 2;
-    // 标题（左对齐，金-4，字距同稿）
-    const titleWidth = head.countX - 4;
-    const title = UiHelper.createLabel(
-      "message_log_head_title",
-      head.title,
-      head.titleColor,
-      head.titleFontSize,
-      new Vec2(left + titleWidth / 2, centerY),
-      new Size(titleWidth, head.height),
-      Label.HorizontalAlign.LEFT,
-    );
-    const titleLabel = title.getComponent(Label);
-    if (titleLabel) titleLabel.spacingX = head.titleSpacingX;
-    this.addChild(title);
+    // 底板随尺寸重画（VectorPlate 每帧比对尺寸）；底边不动地变高/变矮：稿里面板贴屏幕右下，
+    // 收起时应当从顶部往下折（底边留在 prefab 设计的 bottom 处）—— 基准是 prefab 根位（#1359 口径）
+    this.plateNode.getComponent(UITransform)!.setContentSize(width, height);
+    this.setPosition(this.rootHome.x, this.rootHome.y - (layout.size.height - height) / 2);
+    // 头部零件挪到剩余面板中心（收起时），展开还原到 prefab 设计位
+    const centerY = height / 2 - layout.head.height / 2;
+    this.headNodes.forEach((node, index) => {
+      node.setPosition(node.position.x, this.collapsed ? centerY : this.headYs[index], 0);
+    });
+    // 正文与底部注释收起时隐藏（静态骨架不重建，只切显隐）
+    this.rowsAnchor.active = !this.collapsed;
+    this.footNodes.forEach((node) => (node.active = !this.collapsed));
     // 计数：当前条数（金）+ ` / 1000`（弱化）。数字右对齐到固定槽位，位数变化时后缀不跟着跳
-    const count = MessageLogStore.count();
-    this.addChild(
-      UiHelper.createLabel(
-        "message_log_head_count",
-        `${count}`,
-        head.countColor,
-        head.countFontSize,
-        new Vec2(left + head.countX + head.numWidth / 2, centerY),
-        new Size(head.numWidth, head.height),
-        Label.HorizontalAlign.RIGHT,
-      ),
-    );
-    this.addChild(
-      UiHelper.createLabel(
-        "message_log_head_count_den",
-        ` / ${MessageLogStore.CAPACITY}`,
-        head.countDenColor,
-        head.countFontSize,
-        new Vec2(left + head.countX + head.numWidth + head.denWidth / 2, centerY),
-        new Size(head.denWidth, head.height),
-        Label.HorizontalAlign.LEFT,
-      ),
-    );
-    this.addCapBar(left, right, centerY);
-    this.addCollapseButton(right, centerY);
+    this.countLabel.string = `${MessageLogStore.count()}`;
+    this.denLabel.string = ` / ${MessageLogStore.CAPACITY}`;
+    this.repaintCapBar();
+    if (!this.collapsed) this.renderRows();
+    // 收起钮文字随状态切（文案属内容；按钮底板样式由 Graphics 绘制，不随数据变）
+    const cfg = layout.head.collapse;
+    this.collapseLabel.string = this.collapsed ? cfg.expandText : cfg.text;
   }
 
-  /** 容量条：常色金阶、满格转朱红（稿 `.capbar`；宽度吃掉计数与收起钮之间的剩余空间） */
-  private addCapBar(left: number, right: number, centerY: number) {
+  /** 容量条重画：常色金阶、满格转朱红（稿 `.capbar`；锚点已承载摆位，这里只画当前占比） */
+  private repaintCapBar() {
     const bar = layout.head.bar;
-    const barLeft = left + layout.head.countX + layout.head.numWidth + layout.head.denWidth + bar.gap;
-    const barRight = right - layout.head.collapse.size.width - bar.gap;
-    const barWidth = barRight - barLeft;
-    if (barWidth <= 0) return;
-    const node = UiHelper.createNode("message_log_cap_bar", new Vec2((barLeft + barRight) / 2, centerY), new Size(barWidth, bar.height));
-    const graphics = node.addComponent(Graphics);
+    const graphics = this.capGraphics;
+    const barWidth = this.capGraphics.node.getComponent(UITransform)!.contentSize.width;
+    graphics.clear();
     graphics.fillColor = bar.bg;
     graphics.roundRect(-barWidth / 2, -bar.height / 2, barWidth, bar.height, bar.radius);
     graphics.fill();
@@ -155,14 +163,12 @@ export default class MessageLog extends Node {
       graphics.roundRect(-barWidth / 2, -bar.height / 2, fillWidth, bar.height, bar.radius);
       graphics.fill();
     }
-    this.addChild(node);
   }
 
-  /** 收起钮（稿 `.chat-tools button` 22×22）：点一下折到只剩标题行，再点展开 */
-  private addCollapseButton(right: number, centerY: number) {
+  /** 收起钮（稿 `.chat-tools button` 22×22，挂 CollapseAnchor 原点）：点一下折到只剩标题行，再点展开 */
+  private buildCollapseButton(anchor: Node) {
     const cfg = layout.head.collapse;
-    const button = UiHelper.createNode("message_log_collapse", new Vec2(right - cfg.size.width / 2, centerY), cfg.size);
-    const graphics = button.addComponent(Graphics);
+    const graphics = anchor.addComponent(Graphics);
     const paint = (hover: boolean) => {
       graphics.clear();
       graphics.fillColor = cfg.fill;
@@ -174,38 +180,41 @@ export default class MessageLog extends Node {
       graphics.stroke();
     };
     paint(false);
-    button.addChild(
-      UiHelper.createLabel("message_log_collapse_label", this.collapsed ? cfg.expandText : cfg.text, cfg.color, cfg.fontSize, new Vec2(), cfg.size),
+    const label = UiHelper.createLabel(
+      "message_log_collapse_label", cfg.text, cfg.color, cfg.fontSize, new Vec2(), cfg.size,
     );
+    this.collapseLabel = label.getComponent(Label)!;
+    anchor.addChild(label);
     // 按钮自己吃掉点击（挡穿透），不冒泡成面板的挡穿透抬起
-    blockClickThrough(button);
-    button.on(Node.EventType.TOUCH_END, () => this.toggleCollapse(), this);
+    blockClickThrough(anchor);
+    anchor.on(Node.EventType.TOUCH_END, () => this.toggleCollapse(), this);
     // 点击音：收起/展开是一次真实操作（#685 口径：有动作的按钮才响）
-    SoundManager.bindClick(button);
+    SoundManager.bindClick(anchor);
     if (HAS_MOUSE) {
-      trackUiPress(button);
-      button.on(Node.EventType.MOUSE_ENTER, () => paint(true), this);
-      button.on(Node.EventType.MOUSE_LEAVE, () => paint(false), this);
-    }
-    this.addChild(button);
-  }
+      trackUiPress(anchor);
+      anchor.on(Node.EventType.MOUSE_ENTER, () => paint(true), this);
+      anchor.on(Node.EventType.MOUSE_LEAVE, () => paint(false), this);
+    }  }
 
-  /** 正文：最近 `rows.count` 条（时间 + 分类标签 + 文字），空仓给一句安静的空态 */
-  private addRows(width: number, height: number) {
+  /** 正文：最近 `rows.count` 条（时间 + 分类标签 + 文字），空仓给一句安静的空态（挂 RowsAnchor，行区摆位归 prefab 锚点） */
+  private renderRows() {
+    // 行区整块重建（onChange 全量重画口径；最多 10 行，重建比差量省心且不会漏）
+    clearChildren(this.rowsAnchor);
     const rows = layout.rows;
-    const left = -width / 2 + rows.paddingX;
-    const top = height / 2 - layout.head.height;
+    const left = -layout.size.width / 2 + rows.paddingX;
+    // RowsAnchor 中心已对齐行区中心（prefab 设计）；行区顶/底边取相对锚点的 y
+    const top = layout.size.height / 2 - layout.head.height - this.rowsAnchor.position.y;
+    const footTop = -layout.size.height / 2 + layout.foot.height - this.rowsAnchor.position.y;
     const entries = MessageLogStore.all().slice(-rows.count);
     if (!entries.length) {
-      const footTop = -height / 2 + layout.foot.height;
-      this.addChild(
+      this.rowsAnchor.addChild(
         UiHelper.createLabel(
           "message_log_empty",
           rows.emptyText,
           rows.emptyColor,
           rows.text.fontSize,
           new Vec2(0, (top + footTop) / 2),
-          new Size(width - rows.paddingX * 2, rows.height),
+          new Size(layout.size.width - rows.paddingX * 2, rows.height),
         ),
       );
       return;
@@ -262,44 +271,7 @@ export default class MessageLog extends Node {
         Label.HorizontalAlign.LEFT,
       ),
     );
-    this.addChild(row);
-  }
-
-  /** 底部注释：分隔细线 + 左「系统消息 · 不含聊天对话」+ 右「满 1000 条自动清空 · 重新累计」 */
-  private addFoot(width: number, height: number) {
-    const foot = layout.foot;
-    const left = -width / 2 + foot.paddingX;
-    const right = width / 2 - foot.paddingX;
-    const centerY = -height / 2 + foot.height / 2;
-    const ruleY = -height / 2 + foot.height;
-    this.plate.lineWidth = 1;
-    this.plate.strokeColor = foot.ruleColor;
-    this.plate.moveTo(left, ruleY);
-    this.plate.lineTo(right, ruleY);
-    this.plate.stroke();
-    const halfWidth = (right - left) / 2;
-    this.addChild(
-      UiHelper.createLabel(
-        "message_log_foot_left",
-        foot.left,
-        foot.leftColor,
-        foot.fontSize,
-        new Vec2(left + halfWidth / 2 - 4, centerY),
-        new Size(halfWidth, foot.height),
-        Label.HorizontalAlign.LEFT,
-      ),
-    );
-    this.addChild(
-      UiHelper.createLabel(
-        "message_log_foot_right",
-        foot.right,
-        foot.rightColor,
-        foot.fontSize,
-        new Vec2(left + halfWidth * 1.5 + 4, centerY),
-        new Size(halfWidth, foot.height),
-        Label.HorizontalAlign.RIGHT,
-      ),
-    );
+    this.rowsAnchor.addChild(row);
   }
 
   /** 收起 / 展开（只重画本块，不碰仓） */
