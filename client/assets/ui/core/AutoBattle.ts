@@ -419,7 +419,8 @@ export default class AutoBattle {
     }
     // 路径按间隔重算：追怪时目标会移动；点击寻路的点不动，重算是廉价的幂等操作
     if (this.lastRepathAt === 0 || now - this.lastRepathAt >= autoBattle.repathInterval) repath();
-    const waypoint = this.path[this.pathIndex];
+    // 经典模式会在到步后同帧切下一个路点，声明为 let（连续模式行为不变）
+    let waypoint = this.path[this.pathIndex];
     if (!waypoint) {
       // 无路可走（寻路失败且直线趋近也为空）：原地等待下一轮重算
       roleDisplay.setAutoMove(null);
@@ -432,15 +433,23 @@ export default class AutoBattle {
     // 路点在经典模式下是逐格格心（PathGrid keepCells / 服务端 path 同一口径），步长恒定。
     if (autoBattle.classicWalkMode) {
       const run = autoBattle.moveByRun;
-      if (direction.length() <= (run ? ROLE_RUN_SPEED : ROLE_WALK_SPEED)) {
-        // 走完这一步：钉在格心，切下一步（本帧先停一步，下一 tick 朝新路点走）
+      const frameStep = run ? ROLE_RUN_SPEED : ROLE_WALK_SPEED;
+      // 一格一步：到步吸附格心后**同帧接下一步**（#1346）——每个路点空停一帧
+      // 在逐格路径上是一路一顿；相邻格心间距恒大于一帧步长，循环至多推进一步
+      while (waypoint) {
+        const remaining = Math.hypot(waypoint.x - position.x, waypoint.y - position.y);
+        if (remaining > frameStep) {
+          direction.set(waypoint.x - position.x, waypoint.y - position.y);
+          direction.multiplyScalar(1 / remaining);
+          roleDisplay.setAutoMove(direction, run);
+          return;
+        }
         roleDisplay.snapToWorldPosition(waypoint.x, waypoint.y);
         this.pathIndex++;
-        roleDisplay.setAutoMove(null);
-        return;
+        waypoint = this.path[this.pathIndex];
       }
-      direction.multiplyScalar(1 / direction.length());
-      roleDisplay.setAutoMove(direction, run);
+      // 路点走完：原地等待（点击寻路下帧判到达；追怪下帧判攻击距离或重寻路）
+      roleDisplay.setAutoMove(null);
       return;
     }
     if (direction.length() < autoBattle.waypointTolerance) {
@@ -479,9 +488,34 @@ export default class AutoBattle {
     } else {
       this.path = [new Vec2(to.x, to.y)];
     }
+    // 经典模式（#1346）：路点[0] 是当前格的格心，角色步中途可能已越过它——裁掉回头路
+    if (autoBattle.classicWalkMode) this.prunePassedWaypoints(new Vec2(from.x, from.y));
     // 服务端寻路（#811 第三道）：本地的这一份是**即时预判**（点了就先动，不留 40~80ms 空窗），
     // 服务端回执一到就用它替换 —— 权威路点才算「我走过去没穿墙」。连接不在时（离线）就只走本地
     if (this.mapId) this.pendingPathSeq = CombatChannel.requestPath(this.mapId, { x: to.x, y: to.y });
+  }
+
+  /**
+   * 裁掉已越过的前导路点（#1346，经典走路模式）
+   *
+   * 重寻路从「当前位置所在格」起算，路点[0] 是该格的**格心**——角色步中途已经越过格心时，
+   * 新路径第一个点就在身后，不裁掉就会先走回头路再前进，每 400ms 重寻路一次形成来回跑。
+   * 服务端路径回执同样从「上报位置所在格」起算，落地后同样裁。
+   *
+   * 判据（两个条件都满足才裁，避免拐角误裁）：
+   * - 距路点[0] ≤ cellSize（还在它附近一格内）；
+   * - 距路点[1] < 路点[0]→路点[1] 的距离（已经比路点[0]更接近下一站 = 已越过它）。
+   */
+  private static prunePassedWaypoints(position: Vec2) {
+    while (this.path.length >= 2) {
+      const current = this.path[0];
+      const next = this.path[1];
+      const passed =
+        Math.hypot(position.x - current.x, position.y - current.y) <= autoBattle.cellSize &&
+        Math.hypot(position.x - next.x, position.y - next.y) < Math.hypot(next.x - current.x, next.y - current.y);
+      if (!passed) break;
+      this.path.shift();
+    }
   }
 
   /**
@@ -501,6 +535,11 @@ export default class AutoBattle {
     if (frame.points.length === 0) return;
     this.path = frame.points.map((point) => new Vec2(point.x, point.y));
     this.pathIndex = 0;
+    // 服务端路径同样从「上报位置所在格」的格心起算（#1346）：角色步中途已越过时裁掉回头路
+    if (autoBattle.classicWalkMode) {
+      const position = this.roleDisplay && isValid(this.roleDisplay) ? this.roleDisplay.getWorldPosition() : null;
+      if (position) this.prunePassedWaypoints(new Vec2(position.x, position.y));
+    }
   }
 
   /**
