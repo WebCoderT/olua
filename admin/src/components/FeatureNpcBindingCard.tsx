@@ -32,9 +32,18 @@ export function FeatureNpcBindingCard({ feature }: { feature: NpcFeature }) {
 
   const load = useCallback(async () => {
     try {
-      const page = await npcsApi.list({ size: 500 });
-      setNpcs(page.list);
-      setPicked(page.list.find((row) => row.feature === feature)?.id ?? "");
+      // 服务端分页 size 上限 100（#1374）：按 100 一页循环拉全，
+      // 防御 NPC 数量超过一页（当前出厂 21 个，超页时才多发请求）
+      const size = 100;
+      const all: Npc[] = [];
+      let page = await npcsApi.list({ page: 1, size });
+      all.push(...page.list);
+      while (all.length < page.total && page.list.length > 0) {
+        page = await npcsApi.list({ page: page.page + 1, size });
+        all.push(...page.list);
+      }
+      setNpcs(all);
+      setPicked(all.find((row) => row.feature === feature)?.id ?? "");
     } catch {
       /* 错误已由请求层统一提示 */
     }
